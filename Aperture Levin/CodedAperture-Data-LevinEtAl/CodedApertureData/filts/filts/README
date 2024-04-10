@@ -1,0 +1,4 @@
+This file contains coded aperture blur kernel calibrated at 9 different depths.
+Each file contains 7 different filters, computed at the same depth but in varying spatial locations (to account for redial distortion). The spatial locations of the filters correspond to 150 pixels blocks where filter #4 is the central one, (covering the range of [-75 +75] pixels from the center). The filters don’t fully cover the entire frame width.
+ 
+
