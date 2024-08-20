@@ -47,62 +47,6 @@ def computeCrossCorrelation(img):
     return shift_vals, corr_vals
 
 
-# def loss_func(est, img, shift):
-#     w1_est = est
-#     w2_est = 1 - w1_est
-    
-#     # Scale img between 0 and 1
-#     ## original blurred image
-#     img = img / np.max(img)
-#     # plt.figure()
-#     # plt.imshow(img, cmap="gray")
-    
-#     # Compute PSF and perform Wiener deconvolution
-#     psf = compute_psf(shift, w1_est, w2_est)
-#     # deconvolved original blurred with estimated psf
-#     deconvolved = sk.restoration.wiener(img, psf, balance=0)
-#     # plt.figure()
-#     # plt.imshow(deconvolved, cmap="gray")
-#     # Generate shifted images
-#     I1_est = deconvolved.copy()
-#     I2_est = I1_est.copy()
-#     I2_est[:, :-shift] = I2_est[:, shift:]
-
-#     # Estimate It based on the estimated weights
-#     # estimated blurred image from deconvolved with estimated psf
-#     It_est = w1_est * I1_est + w2_est * I2_est
-#     # plt.figure()
-#     # plt.imshow(It_est, cmap="gray")
-#     # plt.show()
-#     # Compute cross-correlation of the estimated image with itself
-#     shifts, corr = computeCrossCorrelation(deconvolved)
-    
-#     # Apply Savitzky-Golay filter to smooth the correlation and find peaks
-#     window_length = 5  
-#     polyorder = 3 
-#     y_baseline = sp.signal.savgol_filter(corr, window_length, polyorder)
-#     corr_filtered = corr - y_baseline
-
-#     # Identify the indices of the peaks at the target shifts
-#     target_shifts = [shift, -shift]
-#     peak_loss = 0
-#     for ts in target_shifts:
-#         index = np.where(shifts == ts)[0]
-#         if len(index) > 0:
-#             peak_loss += np.abs(corr_filtered[index[0]])
-
-#     # Compute cross-correlation using FFT
-#     img_fft = np.fft.fft2(img)
-#     It_est_fft = np.fft.fft2(It_est)
-#     corr_fft = np.fft.ifft2(img_fft * np.conj(It_est_fft))
-#     corr = np.abs(np.fft.fftshift(corr_fft))
-
-#     # Combine the losses with appropriate weights
-#     total_loss = - np.max(corr)
-#     print(total_loss)
-    
-#     return total_loss
-
 def computeCrossCorrelation(img):
     max_shift = img.shape[1] // 2
     shift_vals = []
@@ -116,12 +60,34 @@ def computeCrossCorrelation(img):
     
     return np.array(shift_vals), np.array(corr_vals)
 
+def grad_image(img):
+    gx, gy = np.gradient(img)
+    return np.sqrt(gx**2 + gy**2)
 
 def loss_func(est, img, shift):
     w1_est = est
     w2_est = 1 - w1_est
+
+    # Scale img between 0 and 1
+    img = img / np.max(img)
+
+    # Compute PSF and perform Wiener deconvolution
+    psf = compute_psf(shift, w1_est, w2_est)
+    deconvolved = sk.restoration.wiener(img, psf, balance=0)
+
+    blur_rec = w1_est*deconvolved[:, shift:] + w2_est*deconvolved[:, :-shift]
+
+    # grad_img = grad_image(img)
+    # grad_blur_rec = grad_image(blur_rec)
+
+    cross_corr = sp.signal.correlate2d(img, blur_rec, mode='valid')
+    # cross_corr = -np.sum(cross_corr)
+
+    # plt.imshow(deconvolved, cmap='gray')
+    # plt.show()
+
     
-    return total_loss
+    return -np.sum(cross_corr)
 
 def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
     # Interactive image display
@@ -159,20 +125,24 @@ def main():
     grey = True
 
     original_image = Image.Image(path, size, grey)
-    w1 = 0.3
-    w2 = 0.7
+    w1 = 0.7
+    w2 = 0.3
 
     shift = 6
 
     shifted = shiftImage.shiftImage(original_image, w1, w2, shift)
     shifted.computePixelShift()
 
-    w1guess = 0.5
+    w1guess = 0.1
 
     bounds = [(0, 1)]
 
     # loss_func(weight_guess, shifted.It, shift)
-    result = sp.optimize.minimize(loss_func, w1guess, args=(shifted.It, shift), bounds=bounds, method='Powell') # Powell L-BFGS-B
+    # result = sp.optimize.minimize(loss_func, w1guess, args=(shifted.It, shift), bounds=bounds, method='Powell') # Powell L-BFGS-B
+    result = sp.optimize.differential_evolution(loss_func, bounds, args=(shifted.It, shift))
+    # simulation annealing
+    # result = sp.optimize.dual_annealing(loss_func, bounds, args=(shifted.It, shift))
+    # result = sp.optimize.basinhopping(loss_func, w1guess, niter=100, minimizer_kwargs={'args': (shifted.It, shift), 'bounds': bounds})
     print(result.x)
 
     psf = compute_psf(shift, result.x, 1 - result.x)
