@@ -47,47 +47,37 @@ def computeCrossCorrelation(img):
     return shift_vals, corr_vals
 
 
-def computeCrossCorrelation(img):
-    max_shift = img.shape[1] // 2
-    shift_vals = []
-    corr_vals = []
-    
-    for x_shift in range(-max_shift, max_shift + 1):
-        It_shifted = sp.ndimage.shift(img, shift=(0, x_shift), mode='constant', cval=0)
-        corr_val = np.correlate(img.flatten(), It_shifted.flatten(), mode="valid").max()
-        shift_vals.append(x_shift)
-        corr_vals.append(corr_val)
-    
-    return np.array(shift_vals), np.array(corr_vals)
-
-def grad_image(img):
-    gx, gy = np.gradient(img)
-    return np.sqrt(gx**2 + gy**2)
-
 def loss_func(est, img, shift):
     w1_est = est
     w2_est = 1 - w1_est
 
+    
+
+    # contrast enhance image
+    img = cv2.equalizeHist((img).astype(np.uint8))
     # Scale img between 0 and 1
     img = img / np.max(img)
 
     # Compute PSF and perform Wiener deconvolution
     psf = compute_psf(shift, w1_est, w2_est)
     deconvolved = sk.restoration.wiener(img, psf, balance=0)
+    I1_est = deconvolved
+    I2_est = I1_est.copy()
+    I2_est[:, :-shift] = I2_est[:, shift:]
 
-    blur_rec = w1_est*deconvolved[:, shift:] + w2_est*deconvolved[:, :-shift]
+    img = sp.ndimage.shift(img, shift=(0,-shift//2), mode='constant', cval=0)
 
-    # grad_img = grad_image(img)
-    # grad_blur_rec = grad_image(blur_rec)
+    blur_rec = w1_est*I1_est + w2_est*I2_est
+    # blur_rec = w1_est*deconvolved[:, shift:] + w2_est*deconvolved[:, :-shift]
 
     cross_corr = sp.signal.correlate2d(img, blur_rec, mode='valid')
-    # cross_corr = -np.sum(cross_corr)
 
-    # plt.imshow(deconvolved, cmap='gray')
-    # plt.show()
+    plt.imshow(deconvolved, cmap='gray')
+    plt.show()
 
     
-    return -np.sum(cross_corr)
+    return  -np.sum(cross_corr)
+
 
 def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
     # Interactive image display
@@ -128,18 +118,18 @@ def main():
     w1 = 0.7
     w2 = 0.3
 
-    shift = 6
+    shift = 10
 
     shifted = shiftImage.shiftImage(original_image, w1, w2, shift)
     shifted.computePixelShift()
 
-    w1guess = 0.1
+    w1guess = 0.7
 
     bounds = [(0, 1)]
 
     # loss_func(weight_guess, shifted.It, shift)
-    # result = sp.optimize.minimize(loss_func, w1guess, args=(shifted.It, shift), bounds=bounds, method='Powell') # Powell L-BFGS-B
-    result = sp.optimize.differential_evolution(loss_func, bounds, args=(shifted.It, shift))
+    result = sp.optimize.minimize(loss_func, w1guess, args=(shifted.It, shift), bounds=bounds, method='Powell') # Powell L-BFGS-B
+    # result = sp.optimize.differential_evolution(loss_func, bounds, args=(shifted.It, shift))
     # simulation annealing
     # result = sp.optimize.dual_annealing(loss_func, bounds, args=(shifted.It, shift))
     # result = sp.optimize.basinhopping(loss_func, w1guess, niter=100, minimizer_kwargs={'args': (shifted.It, shift), 'bounds': bounds})
@@ -148,12 +138,8 @@ def main():
     psf = compute_psf(shift, result.x, 1 - result.x)
     img = shifted.It/ np.max(shifted.It)
     deconvolved1 = sk.restoration.wiener(img, psf, balance=0)
-    # corr1 = sp.signal.correlate2d(deconvolved, deconvolved, mode='same')
     shifted1, corr1 = computeCrossCorrelation(deconvolved1)
-    # window_length = 5  
-    # polyorder = 3 
-    # y_baseline = sp.signal.savgol_filter(corr1, window_length, polyorder)
-    # corr1 = corr1 - y_baseline
+
     plt.figure()
     plt.subplot(1,2,1)
     plt.imshow(deconvolved1, cmap='gray')
@@ -178,17 +164,6 @@ def main():
     plt.title('Correlation vs Shift (Set 2) Real')
     plt.xlabel('Shift')
     plt.ylabel('Correlation')
-
-    window_length = 5  
-    polyorder = 3 
-    y_baseline = sp.signal.savgol_filter(corr2, window_length, polyorder)
-    corr2 = corr2 - y_baseline
-
-    # # print corr vals at shift
-    # print(corr1[np.where(shifted1 == shift)], corr1[np.where(shifted1 == -shift)])
-    # print(corr1[np.where(shifted1 == 0)])
-    # print(corr2[np.where(shifted2 == shift)], corr2[np.where(shifted2 == -shift)])
-    # print(corr2[np.where(shifted2 == 0)])
 
     plt.show()
 
