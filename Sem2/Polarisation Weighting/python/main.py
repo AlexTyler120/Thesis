@@ -64,19 +64,23 @@ def loss_func(est, img, shift):
     I2_est[:, :-shift] = I2_est[:, shift:]
     It_est = w1_est * I1_est + w2_est * I2_est
 
-    shifts, corr = computeCrossCorrelation(deconvolved)
-    window_length = 5  
-    polyorder = 3 
-    y_baseline = sp.signal.savgol_filter(corr, window_length, polyorder)
-    corr_filtered = corr - y_baseline
+    # shifts, corr = computeCrossCorrelation(deconvolved)
+    # window_length = 5  
+    # polyorder = 3 
+    # y_baseline = sp.signal.savgol_filter(corr, window_length, polyorder)
+    # corr_filtered = corr - y_baseline
 
-    # do for estimated
-    shifts_est, corr_est = computeCrossCorrelation(It_est)
-    y_baseline_est = sp.signal.savgol_filter(corr_est, window_length, polyorder)
-    corr_filtered_est = corr_est - y_baseline_est
-
-    print(total_loss)
-    return total_loss
+    # # do for estimated
+    # shifts_est, corr_est = computeCrossCorrelation(It_est)
+    # y_baseline_est = sp.signal.savgol_filter(corr_est, window_length, polyorder)
+    # corr_filtered_est = corr_est - y_baseline_est
+    # Compute cross-correlation between It_est and img
+    cross_corr = sp.signal.fftconvolve(It_est, img[::-1, ::-1], mode='same')
+    
+    # Calculate the loss as the inverse of the peak cross-correlation
+    loss = -np.max(cross_corr)
+    
+    return loss
 
 def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
     # Interactive image display
