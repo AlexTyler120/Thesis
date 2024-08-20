@@ -121,57 +121,7 @@ def loss_func(est, img, shift):
     w1_est = est
     w2_est = 1 - w1_est
     
-    # Scale img between 0 and 1
-    img = img / np.max(img)
-    
-    # Compute PSF and perform Wiener deconvolution
-    psf = compute_psf(shift, w1_est, w2_est)
-    deconvolved = sk.restoration.wiener(img, psf, balance=0)
-
-    # Autocorrelation of the deconvolved image
-    deconvolved_fft = np.fft.fft2(deconvolved)
-    autocorr_fft = np.fft.ifft2(deconvolved_fft * np.conj(deconvolved_fft))
-    autocorr = np.abs(np.fft.fftshift(autocorr_fft))
-
-    # Detect peaks in the autocorrelation
-    shifts = np.arange(-autocorr.shape[1] // 2, autocorr.shape[1] // 2 + 1)
-    center = autocorr.shape[1] // 2
-    autocorr_line = autocorr[center, :]
-    
-    peaks, properties = sp.signal.find_peaks(autocorr_line, height=0.1, distance=shift, prominence=0.1)
-
-    # Penalize for significant peaks indicating shifts
-    shift_loss = 0
-    for peak in peaks:
-        if abs(shifts[peak]) == shift:
-            shift_loss += properties['prominence'][peaks == peak][0]
-
-    # Directly penalize shifts in the deconvolved image
-    direct_shift_penalty = 0
-    if len(peaks) > 0:
-        direct_shift_penalty = min([abs(shifts[peak]) for peak in peaks])
-
-    # Image difference loss (Mean Squared Error)
-    mse_loss = np.mean((img - deconvolved) ** 2)
-
-    # Adjusted penalty for extreme values of w1 or w2
-    epsilon = 1e-10  # small value to avoid log(0)
-    weight_penalty = 0.01  # Reduced weight to prevent it from dominating
-    penalty = -weight_penalty * np.log(w1_est * (1 - w1_est) + epsilon)
-
-    # Combine the losses with appropriate weights
-    weight_shift = 10  # Increased weight for shift detection
-    weight_mse = 1  # Normal weight for MSE
-    weight_direct_shift = 5  # Additional penalty for direct shift detection
-
-    total_loss = (weight_shift * shift_loss + 
-                  weight_mse * mse_loss + 
-                  weight_direct_shift * direct_shift_penalty + 
-                  penalty)
-
-    print(total_loss)
     return total_loss
-
 
 def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
     # Interactive image display
@@ -204,20 +154,20 @@ def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
 
 
 def main():
-    path = "python/flower.jpg"
-    size = 0.05
+    path = "python/nopol.jpg"
+    size = 0.2
     grey = True
 
     original_image = Image.Image(path, size, grey)
-    w1 = 0.7
-    w2 = 0.3
+    w1 = 0.3
+    w2 = 0.7
 
     shift = 6
 
     shifted = shiftImage.shiftImage(original_image, w1, w2, shift)
     shifted.computePixelShift()
 
-    w1guess = 0.3
+    w1guess = 0.5
 
     bounds = [(0, 1)]
 
@@ -230,23 +180,35 @@ def main():
     deconvolved1 = sk.restoration.wiener(img, psf, balance=0)
     # corr1 = sp.signal.correlate2d(deconvolved, deconvolved, mode='same')
     shifted1, corr1 = computeCrossCorrelation(deconvolved1)
-    window_length = 5  
-    polyorder = 3 
-    y_baseline = sp.signal.savgol_filter(corr1, window_length, polyorder)
-    corr1 = corr1 - y_baseline
+    # window_length = 5  
+    # polyorder = 3 
+    # y_baseline = sp.signal.savgol_filter(corr1, window_length, polyorder)
+    # corr1 = corr1 - y_baseline
     plt.figure()
+    plt.subplot(1,2,1)
     plt.imshow(deconvolved1, cmap='gray')
     plt.title('Deconvolved Image est')
-
-
+    plt.subplot(1,2,2)
+    plt.plot(shifted1, corr1)
+    plt.title('Correlation vs Shift (Set 1) Est')
+    plt.xlabel('Shift')
+    plt.ylabel('Correlation')
+    
     psf = compute_psf(shift, w1, w2)
     img = shifted.It/ np.max(shifted.It)
     deconvolved2 = sk.restoration.wiener(img, psf, balance=0)
+    shifted2, corr2 = computeCrossCorrelation(deconvolved2)
     plt.figure()
+    plt.subplot(1, 2, 1)
     plt.imshow(deconvolved2, cmap='gray')
     plt.title('Deconvolved Image real')
 
-    shifted2, corr2 = computeCrossCorrelation(deconvolved2)
+    plt.subplot(1, 2, 2)
+    plt.plot(shifted2, corr2)
+    plt.title('Correlation vs Shift (Set 2) Real')
+    plt.xlabel('Shift')
+    plt.ylabel('Correlation')
+
     window_length = 5  
     polyorder = 3 
     y_baseline = sp.signal.savgol_filter(corr2, window_length, polyorder)
