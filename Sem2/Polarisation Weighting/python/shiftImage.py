@@ -29,8 +29,8 @@ class shiftImage:
         self.estimated_psf = None
 
     def computeCrossCorrelation(self):
-        max_shift = self.image_width // 2
-        # max_shift = 20
+        # max_shift = self.image_width // 2
+        max_shift = 20
         shift_vals = []
         corr_vals = []
 
@@ -50,6 +50,7 @@ class shiftImage:
         
         shift_vals = np.array(shift_vals)
         corr_vals = np.array(corr_vals)
+        
 
         return shift_vals, corr_vals
     
