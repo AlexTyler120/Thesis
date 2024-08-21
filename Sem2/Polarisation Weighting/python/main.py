@@ -22,8 +22,8 @@ def compute_psf(shift, w1, w2):
     return psf
 
 def computeCrossCorrelation(img):
-    max_shift = img.shape[1] // 2
-    # max_shift = 26
+    # max_shift = img.shape[1] // 2
+    max_shift = 20
     shift_vals = []
     corr_vals = []
 
@@ -46,38 +46,91 @@ def computeCrossCorrelation(img):
 
     return shift_vals, corr_vals
 
+def recreate_blur(img, shift, w1, w2):
+    I1 = img.copy()
+    I2 = I1.copy()
+
+    I2[:, :-shift] = I2[:, shift:]
+    blur_rec = w1*I1 + w2*I2
+
+    return blur_rec
 
 def loss_func(est, img, shift):
     w1_est = est
     w2_est = 1 - w1_est
 
-    
-
     # contrast enhance image
-    img = cv2.equalizeHist((img).astype(np.uint8))
     # Scale img between 0 and 1
     img = img / np.max(img)
+
+    # img = sp.ndimage.shift(img, shift=(0,-shift//2), mode='constant', cval=0)
 
     # Compute PSF and perform Wiener deconvolution
     psf = compute_psf(shift, w1_est, w2_est)
     deconvolved = sk.restoration.wiener(img, psf, balance=0)
-    I1_est = deconvolved
-    I2_est = I1_est.copy()
-    I2_est[:, :-shift] = I2_est[:, shift:]
 
-    img = sp.ndimage.shift(img, shift=(0,-shift//2), mode='constant', cval=0)
+    # Use your computeCrossCorrelation function
+    shift_vals, corr_vals = computeCrossCorrelation(deconvolved)
 
-    blur_rec = w1_est*I1_est + w2_est*I2_est
-    # blur_rec = w1_est*deconvolved[:, shift:] + w2_est*deconvolved[:, :-shift]
+    # generate blur
+    blur_rec = recreate_blur(deconvolved, shift, w1_est, w2_est)
 
-    cross_corr = sp.signal.correlate2d(img, blur_rec, mode='valid')
+    # Find the index of the peak at zero shift
+    zero_idx = np.where(shift_vals == 0)[0][0]
 
-    plt.imshow(deconvolved, cmap='gray')
-    plt.show()
+    loss = 0
 
-    
-    return  -np.sum(cross_corr)
+    # Check for gradients on the left side (should be positive)
+    for i in range(1, zero_idx):
+        # print(f"i at shift: {i} at {shift_vals[i]} and corr_vals[i]: {corr_vals[i]} and corr_vals[i-1]: {corr_vals[i-1]}")
+        if corr_vals[i] <= corr_vals[i-1]:  # Gradient should be positive, but it's not
+            loss += abs(corr_vals[i] - corr_vals[i-1])
 
+    # Check for gradients on the right side (should be negative)
+    for i in range(zero_idx + 1, len(corr_vals)):
+        if corr_vals[i] >= corr_vals[i-1]:  # Gradient should be negative, but it's not
+            loss += abs(corr_vals[i] - corr_vals[i-1])
+
+
+
+    winlen = 5
+    poly = 3
+    corr_smooth = sp.signal.savgol_filter(corr_vals, winlen, poly)
+
+    sav_filtered_corr = corr_vals - corr_smooth
+
+    # Find the indices corresponding to ±shift
+    pos_shift_idx = np.where(shift_vals == shift)[0]
+    neg_shift_idx = np.where(shift_vals == -shift)[0]
+
+     # Define a target strongly negative value for ±shift
+    target_negative_value = -10  # Adjust this target as needed
+
+    # Penalize if the values at ±shift deviate from the target negative value
+    if len(pos_shift_idx) > 0:
+        loss += abs(sav_filtered_corr[pos_shift_idx[0]] - target_negative_value)
+
+    if len(neg_shift_idx) > 0:
+        loss += abs(sav_filtered_corr[neg_shift_idx[0]] - target_negative_value)
+
+    # Penalize if the values immediately adjacent to ±shift are not close to zero
+    if len(pos_shift_idx) > 0 and pos_shift_idx[0] + 1 < len(sav_filtered_corr):
+        loss += abs(sav_filtered_corr[pos_shift_idx[0] + 1])  # Right of +shift
+    if len(pos_shift_idx) > 0 and pos_shift_idx[0] - 1 >= 0:
+        loss += abs(sav_filtered_corr[pos_shift_idx[0] - 1])  # Left of +shift
+
+    if len(neg_shift_idx) > 0 and neg_shift_idx[0] + 1 < len(sav_filtered_corr):
+        loss += abs(sav_filtered_corr[neg_shift_idx[0] + 1])  # Right of -shift
+    if len(neg_shift_idx) > 0 and neg_shift_idx[0] - 1 >= 0:
+        loss += abs(sav_filtered_corr[neg_shift_idx[0] - 1])  # Left of -shift
+
+    # print corr vals at +-shift
+    print(f"corr_vals at +shift: {sav_filtered_corr[pos_shift_idx[0]]}")
+
+    print(f"loss: {loss}")
+    #print mse
+    print(f"mse: {np.mean((img - blur_rec)**2)*100}")
+    return loss
 
 def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
     # Interactive image display
@@ -111,20 +164,19 @@ def interactive_plots(deconvolved, shifted1, corr1, shifted2, corr2):
 
 def main():
     path = "python/nopol.jpg"
-    size = 0.2
+    size = 0.15
     grey = True
 
     original_image = Image.Image(path, size, grey)
-    w1 = 0.7
-    w2 = 0.3
+    w1 = 0.3
+    w2 = 0.7
 
     shift = 10
 
     shifted = shiftImage.shiftImage(original_image, w1, w2, shift)
     shifted.computePixelShift()
 
-    w1guess = 0.7
-
+    w1guess = 0.5
     bounds = [(0, 1)]
 
     # loss_func(weight_guess, shifted.It, shift)
@@ -137,21 +189,24 @@ def main():
 
     psf = compute_psf(shift, result.x, 1 - result.x)
     img = shifted.It/ np.max(shifted.It)
+    # img = sp.ndimage.shift(img, shift=(0,-shift//2), mode='constant', cval=0)
     deconvolved1 = sk.restoration.wiener(img, psf, balance=0)
+    
     shifted1, corr1 = computeCrossCorrelation(deconvolved1)
-
+    winlen = 5
+    poly = 3
+    corr1_smooth = sp.signal.savgol_filter(corr1, winlen, poly)
     plt.figure()
     plt.subplot(1,2,1)
     plt.imshow(deconvolved1, cmap='gray')
     plt.title('Deconvolved Image est')
     plt.subplot(1,2,2)
-    plt.plot(shifted1, corr1)
+    plt.plot(shifted1, corr1-corr1_smooth)
     plt.title('Correlation vs Shift (Set 1) Est')
     plt.xlabel('Shift')
     plt.ylabel('Correlation')
     
     psf = compute_psf(shift, w1, w2)
-    img = shifted.It/ np.max(shifted.It)
     deconvolved2 = sk.restoration.wiener(img, psf, balance=0)
     shifted2, corr2 = computeCrossCorrelation(deconvolved2)
     plt.figure()
@@ -159,8 +214,11 @@ def main():
     plt.imshow(deconvolved2, cmap='gray')
     plt.title('Deconvolved Image real')
 
+    
+
     plt.subplot(1, 2, 2)
-    plt.plot(shifted2, corr2)
+    corr2_smooth = sp.signal.savgol_filter(corr2, winlen, poly)
+    plt.plot(shifted2, corr2-corr2_smooth)
     plt.title('Correlation vs Shift (Set 2) Real')
     plt.xlabel('Shift')
     plt.ylabel('Correlation')
