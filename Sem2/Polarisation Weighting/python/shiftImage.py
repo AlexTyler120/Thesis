@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 import seaborn as sns
+import skimage as sk
 
 class shiftImage:
     def __init__(self, img, w1, w2, shift):
@@ -24,21 +25,19 @@ class shiftImage:
 
         ## estimated vals
         self.estimated_shift = None
-        self.estimated_w1 = 0.3
-        self.estimated_w2 = 0.7
         self.estimated_psf = None
 
-    def computeCrossCorrelation(self):
+    def computeCrossCorrelation(self, img):
         # max_shift = self.image_width // 2
         max_shift = 20
         shift_vals = []
         corr_vals = []
 
         for x_shift in range(-max_shift, max_shift + 1):
-            It_shifted = sp.ndimage.shift(self.It, shift=(0, x_shift), mode='constant', cval=0)
+            It_shifted = sp.ndimage.shift(img, shift=(0, x_shift), mode='constant', cval=0)
 
             # flatten
-            It_flat = self.It.flatten()
+            It_flat = img.flatten()
             It_shifted_flat = It_shifted.flatten()
 
             cross_corr = np.correlate(It_flat, It_shifted_flat, mode="valid")
@@ -79,7 +78,7 @@ class shiftImage:
         return peaks, steepness
     
     def computePixelShift(self):
-        shift_vals, corr_vals = self.computeCrossCorrelation()
+        shift_vals, corr_vals = self.computeCrossCorrelation(self.It)
         corr_vals = self.applyFilter(corr_vals)
         peaks, steepness = self.obtainCorrelationPeaks(shift_vals, corr_vals)
         
@@ -95,11 +94,11 @@ class shiftImage:
             estiamted_shift = None
         self.estimated_shift = estiamted_shift
 
-    def getImagePSF(self):
+    def getImagePSF(self, w1_est):
 
-        psf = np.zeros(self.estimated_shift)
-        psf[self.estimated_shift - 1] = self.estimated_w1
-        psf[0] = self.estimated_w2
+        psf = np.zeros(self.estimated_shift + 1)
+        psf[-1] = w1_est
+        psf[0] = 1 - w1_est
 
         psf = psf/np.sum(psf)
 
@@ -131,3 +130,44 @@ class shiftImage:
 
         plt.show()
         return new_blur
+    
+    def loss_func(self, est):
+        w1_est = est
+
+        img = self.It.copy()
+
+        # Contrast enhance image
+        img = img / np.max(img)
+
+        img = sp.ndimage.shift(img, shift=(0, -self.estimated_shift//2), mode='constant', cval=0)
+
+        # Compute PSF and perform Wiener deconvolution
+        self.getImagePSF(w1_est)
+        deconvolved = sk.restoration.wiener(img, self.estimated_psf, balance=0)
+
+        # Use your computeCrossCorrelation function
+        shift_vals, corr_vals = self.computeCrossCorrelation(deconvolved)
+
+        # Find the index of the peak at zero shift
+        zero_idx = np.where(shift_vals == 0)[0][0]
+
+        loss = 0
+
+        # Check for gradients on the left side (should be positive)
+        for i in range(1, zero_idx):
+            if corr_vals[i] <= corr_vals[i-1]:  # Gradient should be positive, but it's not
+                loss += abs(corr_vals[i] - corr_vals[i-1])
+
+        # Check for gradients on the right side (should be negative)
+        for i in range(zero_idx + 1, len(corr_vals)):
+            if corr_vals[i] >= corr_vals[i-1]:  # Gradient should be negative, but it's not
+                loss += abs(corr_vals[i] - corr_vals[i-1])
+
+        print(f"loss: {loss}")
+        #print mse
+        # print(f"mse: {np.mean((img - blur_rec)**2)*100}")
+        return loss
+    
+    def opt_minimise_weights(self, w1guess, bounds, method):
+        result = sp.optimize.minimize(self.loss_func, w1guess, bounds=bounds, method=method)
+        return result.x
