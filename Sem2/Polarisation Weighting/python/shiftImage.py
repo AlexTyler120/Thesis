@@ -11,7 +11,7 @@ class shiftImage:
         self.It = np.zeros(img.original_image.shape)
         self.image_height = img.image_height
         self.image_width = img.image_width
-
+        # self.It = img.original_image.copy()
         # shift
         I1 = img.original_image.copy()
         I2 = I1.copy()
@@ -29,24 +29,38 @@ class shiftImage:
         self.min_loss = None
         self.best_w1 = None
 
-    def computeCrossCorrelation(self, img, loss = False):
+    def computeCrossCorrelation(self, img, normalised=True):
         if self.estimated_shift is None:
             max_shift = self.image_width // 2
         else:
-            max_shift = self.estimated_shift
-
-        if loss:
             max_shift = self.estimated_shift*2
-            print(f"loss is {loss}")
+
         shift_vals = []
         corr_vals = []
+
+        if normalised:
+            img_mean = np.mean(img)
+            img_std = np.std(img)
+            img_norm = (img - img_mean) / img_std
 
         for x_shift in range(-max_shift, max_shift + 1):
             It_shifted = sp.ndimage.shift(img, shift=(0, x_shift), mode='constant', cval=0)
 
+            if normalised:
+                It_shifted_mean = np.mean(It_shifted)
+                It_shifted_std = np.std(It_shifted)
+                if It_shifted_std == 0:
+                    It_shifted_std = 1
+                It_shifted_normalised = (It_shifted - It_shifted_mean) / It_shifted_std
+                It_flat = img_norm.flatten()
+                It_shifted_flat = It_shifted_normalised.flatten()
+                # numerator = np.correlate(It_flat, It_shifted_flat, mode="valid")
+                # denominator = np.linalg.norm(It_flat) * np.linalg.norm(It_shifted_flat)
+                # cross_corr = numerator / denominator
             # flatten
-            It_flat = img.flatten()
-            It_shifted_flat = It_shifted.flatten()
+            else:
+                It_flat = img.flatten()
+                It_shifted_flat = It_shifted.flatten()
 
             cross_corr = np.correlate(It_flat, It_shifted_flat, mode="valid")
 
@@ -59,7 +73,7 @@ class shiftImage:
         corr_vals = np.array(corr_vals)
         
         return shift_vals, corr_vals
-    
+
     def applyFilter(self, corr_vals):
         windowLength = 7
         polyorder = 3
@@ -115,9 +129,10 @@ class shiftImage:
                 peaks, steepness = self.obtainCorrelationPeaks(shift_vals, corr_vals)
                 # plot corr val
                 
-                plt.plot(shift_vals, corr_vals)
+                plt.plot(shift_vals, corr_vals, label=f"Channel {i}")
                 estimated_shift = self.sortEstPeaks(steepness, peaks, shift_vals)
                 est_shifts.append(estimated_shift)
+            plt.legend()
             plt.show()
             estimated_shift = int(np.mean(est_shifts))
         
@@ -133,7 +148,7 @@ class shiftImage:
 
         psf = np.expand_dims(psf, axis=0)
         self.estimated_psf = psf
-        print(psf)
+        # print(psf)
 
     def testPSF(self, img):
         new_blur = sp.ndimage.convolve(img, self.estimated_psf, mode='constant')
@@ -169,18 +184,18 @@ class shiftImage:
         if np.max(img) > 1:
             img = img / np.max(img)
 
-        img = sp.ndimage.shift(img, shift=(0, -self.estimated_shift//2), mode='constant', cval=0)
+        # img = sp.ndimage.shift(img, shift=(0, -self.estimated_shift//2), mode='constant', cval=0)
 
         # Compute PSF and perform Wiener deconvolution
         self.getImagePSF(w1_est)
-        print(self.estimated_psf)
+        # print(self.estimated_psf)
 
         deconvolved = sk.restoration.wiener(img, self.estimated_psf, balance=0)
 
         # print(f"deconvolved: {deconvolved}")
 
         # Use your computeCrossCorrelation function
-        shift_vals, corr_vals = self.computeCrossCorrelation(deconvolved, loss = True)
+        shift_vals, corr_vals = self.computeCrossCorrelation(deconvolved)
 
         # plt.figure(figsize=(12, 4))
         # plt.subplot(1, 2, 1)
@@ -210,24 +225,49 @@ class shiftImage:
             if corr_vals[i] >= corr_vals[i-1]:  # Gradient should be negative, but it's not
                 loss += abs(corr_vals[i] - corr_vals[i-1])
 
-        print(f"loss: {loss}")
         #print mse
         # print(f"mse: {np.mean((img - blur_rec)**2)*100}")
         savgol_filt = self.applyFilter(corr_vals)
-        posidx = np.where(shift_vals == 10)[0][0]
-        negidx = np.where(shift_vals == -10)[0][0]
-        loss += abs(savgol_filt[posidx]) + abs(savgol_filt[negidx])
-        print(f"new loss is {loss}")
+        posidx = np.where(shift_vals == self.estimated_shift)[0][0]
+        negidx = np.where(shift_vals == -self.estimated_shift)[0][0]
+        loss += abs(savgol_filt[posidx]) + abs(savgol_filt[negidx])        
 
+        central_region_idx = np.where((shift_vals >= 3) & (-shift_vals < -3))[0]
+        central_region_vals = savgol_filt[central_region_idx]
+        flatness_loss = np.std(central_region_vals)
+        # loss += flatness_loss**2
+        # print(f"Initial loss: {loss}")
+        
         if self.min_loss is None or loss < self.min_loss:
+            print(f"Newest loss is {loss} for w1: {w1_est}")
             self.min_loss = loss
             self.best_w1 = w1_est
+        # print(f"final loss: {loss} with w1: {w1_est}")
+        # plot corr vals and filtered corr
+        # plt.figure()
+        # plt.imshow(deconvolved, cmap='gray')
+        # plt.figure(figsize=(12, 4))
+        # plt.subplot(1, 2, 1)
+        # plt.plot(shift_vals, corr_vals)
+        # plt.title('Cross Correlation')
+        # plt.xlabel('Shift Values')
+        # plt.ylabel('Correlation Values')
+        # plt.subplot(1, 2, 2)
+        # plt.plot(shift_vals, savgol_filt)
+        # plt.title('Filtered Cross Correlation')
+        # plt.xlabel('Shift Values')
+        # plt.ylabel('Correlation Values')
+        # plt.show()
+
 
         return loss
 
     
     def opt_minimise_weights(self, w1guess, bounds, method, img):
-        result = sp.optimize.minimize(self.loss_func, w1guess, args=(img), bounds=bounds, method=method)
+        result = sp.optimize.differential_evolution(self.loss_func, bounds, args=(img,))
+        w1_est_global = result.x
+        print(f"Global minimum: {w1_est_global}")
+        # result = sp.optimize.minimize(self.loss_func, w1guess, args=(img), bounds=bounds, method=method)#, options={'xtol': 1e-8, 'ftol': 1e-8, 'maxiter': 10000})#"L-BFGS-B")
         return result.x
     
     def deconvolve(self, shifted):
