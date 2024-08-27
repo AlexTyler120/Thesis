@@ -25,6 +25,19 @@ class shiftImage:
         else:
             self.It = (w1 * I1 + w2 * I2)
 
+        foreground = cv2.imread("python/test_im/birdfront.png")
+        I1_foreground = foreground.copy()
+        I2_foreground = I1_foreground.copy()
+        I2_foreground[:, :-shift-5] = I2_foreground[:, shift+5:]
+        I_shifted = (w1 * I1_foreground.astype(int) + w2 * I2_foreground.astype(int)).astype(int)
+        ignore_mask = np.all(I_shifted == [255, 255, 255], axis=-1)
+        combined_image = np.where(ignore_mask[..., np.newaxis], self.It, I_shifted)
+        
+        self.It = combined_image
+        print(self.It)
+        plt.figure()
+        plt.imshow(self.It)
+        plt.show()
 
         ## estimated vals
         self.estimated_shift = None
@@ -137,7 +150,7 @@ class shiftImage:
                 estimated_shift = self.sortEstPeaks(steepness, peaks, shift_vals)
                 est_shifts.append(estimated_shift)
             plt.legend()
-            # plt.show()
+            plt.show()
             estimated_shift = int(np.mean(est_shifts))
         
         self.estimated_shift = estimated_shift

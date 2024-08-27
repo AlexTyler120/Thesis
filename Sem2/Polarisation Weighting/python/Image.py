@@ -11,3 +11,4 @@ class Image:
         self.image_height = self.original_image.shape[0]
         self.image_width = self.original_image.shape[1]
         self.grey = grey
+        print("imaege maede")
