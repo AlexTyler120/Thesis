@@ -4,6 +4,9 @@ import numpy as np
 import scipy as sp
 import seaborn as sns
 import skimage as sk
+import multiprocessing as mp
+class EarlyStoppingException(Exception):
+    pass
 
 class shiftImage:
     def __init__(self, img, w1, w2, shift):
@@ -54,15 +57,15 @@ class shiftImage:
                 It_shifted_normalised = (It_shifted - It_shifted_mean) / It_shifted_std
                 It_flat = img_norm.flatten()
                 It_shifted_flat = It_shifted_normalised.flatten()
-                # numerator = np.correlate(It_flat, It_shifted_flat, mode="valid")
-                # denominator = np.linalg.norm(It_flat) * np.linalg.norm(It_shifted_flat)
-                # cross_corr = numerator / denominator
+                numerator = np.correlate(It_flat, It_shifted_flat, mode="valid")
+                denominator = np.linalg.norm(It_flat) * np.linalg.norm(It_shifted_flat)
+                cross_corr = numerator / denominator
             # flatten
             else:
                 It_flat = img.flatten()
                 It_shifted_flat = It_shifted.flatten()
 
-            cross_corr = np.correlate(It_flat, It_shifted_flat, mode="valid")
+                cross_corr = np.correlate(It_flat, It_shifted_flat, mode="valid")
 
             corr_val = np.max(cross_corr)
 
@@ -84,7 +87,8 @@ class shiftImage:
         peaks = []
         steepness = []
         for i in range(len(shift_vals) - 1):
-            if i == 0 or i == len(shift_vals) - 1 or i == ((len(shift_vals)) - 1)/2:
+            zero_idx = np.where(shift_vals == 0)[0][0]
+            if i == 0 or i == len(shift_vals) - 1 or (i >= zero_idx - 3 and i <= zero_idx + 3):
                 continue
             else:
                 left_corr = corr_vals[i-1]
@@ -133,7 +137,7 @@ class shiftImage:
                 estimated_shift = self.sortEstPeaks(steepness, peaks, shift_vals)
                 est_shifts.append(estimated_shift)
             plt.legend()
-            plt.show()
+            # plt.show()
             estimated_shift = int(np.mean(est_shifts))
         
         self.estimated_shift = estimated_shift
@@ -172,7 +176,7 @@ class shiftImage:
         sns.heatmap(difference, cmap='hot', cbar=True, square=True)
         plt.title('Difference between Original blurred and Estimated blurred')
 
-        plt.show()
+        # plt.show()
         return new_blur
     
     def loss_func(self, est, img):
@@ -232,12 +236,12 @@ class shiftImage:
         negidx = np.where(shift_vals == -self.estimated_shift)[0][0]
         loss += abs(savgol_filt[posidx]) + abs(savgol_filt[negidx])        
 
-        central_region_idx = np.where((shift_vals >= 3) & (-shift_vals < -3))[0]
+        central_region_idx = np.where((shift_vals > 3) & (-shift_vals < -3))[0]
         central_region_vals = savgol_filt[central_region_idx]
         flatness_loss = np.std(central_region_vals)
-        # loss += flatness_loss**2
+        loss += flatness_loss**2
         # print(f"Initial loss: {loss}")
-        
+        # print("test")
         if self.min_loss is None or loss < self.min_loss:
             print(f"Newest loss is {loss} for w1: {w1_est}")
             self.min_loss = loss
@@ -259,16 +263,23 @@ class shiftImage:
         # plt.ylabel('Correlation Values')
         # plt.show()
 
+        if loss <= 2e-4:
+            raise EarlyStoppingException(f"Early stopping: loss has reached the threshold of 2e-6")
+
 
         return loss
 
     
     def opt_minimise_weights(self, w1guess, bounds, method, img):
-        result = sp.optimize.differential_evolution(self.loss_func, bounds, args=(img,))
-        w1_est_global = result.x
-        print(f"Global minimum: {w1_est_global}")
-        # result = sp.optimize.minimize(self.loss_func, w1guess, args=(img), bounds=bounds, method=method)#, options={'xtol': 1e-8, 'ftol': 1e-8, 'maxiter': 10000})#"L-BFGS-B")
-        return result.x
+        try:
+            result = sp.optimize.differential_evolution(self.loss_func, bounds, args=(img,))
+            w1_est_global = result.x
+            print(f"Global minimum: {w1_est_global}")
+            # result = sp.optimize.minimize(self.loss_func, w1guess, args=(img), bounds=bounds, method=method)#, options={'xtol': 1e-8, 'ftol': 1e-8, 'maxiter': 10000})#"L-BFGS-B")
+            return result.x
+        except EarlyStoppingException as e:
+            print(e)
+            return self.best_w1
     
     def deconvolve(self, shifted):
         # check if shifted is between 0 and 1 if not convert

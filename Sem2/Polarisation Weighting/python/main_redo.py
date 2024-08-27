@@ -18,7 +18,8 @@ def main():
     # path1 = "python/test_im/flowers.jpg"
     # path1 = "python/test_im/squareblackwhite1.jpg"
     # path1 = "python/nopol.jpg"
-    size = 0.3
+    # path1 = "python/test_im/image.png"
+    size = 0.5
     
     grey = False
 
@@ -46,6 +47,7 @@ def main():
 
 
     prev_corr = [0]
+    colour_deconvolved = []
     for i in range(3):
         # cross correlation for original image before any processing
         original_img = birdhalf.original_image[:, :, i]
@@ -73,7 +75,7 @@ def main():
         deconvolved = shiftedBirdHalf.deconvolve(shiftedimg)
         shifted_val_dec, corr_val_dec = shiftedBirdHalf.computeCrossCorrelation(deconvolved)
         corr_dec_filter = shiftedBirdHalf.applyFilter(corr_val_dec)
-
+        colour_deconvolved.append(deconvolved)
         plt.figure()
         plt.subplot(3, 3, 1)
         plt.imshow(original_img, cmap='gray')
@@ -109,7 +111,11 @@ def main():
     plt.figure()
     plt.plot(shift_val_shifted, prev_corr)
     plt.title("Cross Correlation for Shifted Bird")
+    plt.figure()
+    plt.imshow(np.dstack(colour_deconvolved))
+    plt.title("Deconvolved Bird")
     plt.show()
+
 
     print(shiftedBirdHalf.best_w1)
 
