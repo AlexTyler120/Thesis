@@ -25,19 +25,24 @@ class shiftImage:
         else:
             self.It = (w1 * I1 + w2 * I2)
 
-        foreground = cv2.imread("python/test_im/birdfront.png")
-        I1_foreground = foreground.copy()
-        I2_foreground = I1_foreground.copy()
-        I2_foreground[:, :-shift-5] = I2_foreground[:, shift+5:]
-        I_shifted = (w1 * I1_foreground.astype(int) + w2 * I2_foreground.astype(int)).astype(int)
-        ignore_mask = np.all(I_shifted == [255, 255, 255], axis=-1)
-        combined_image = np.where(ignore_mask[..., np.newaxis], self.It, I_shifted)
+#         foreground = cv2.imread("python/test_im/birdfront.png")
+#         foreground = cv2.resize(foreground, (0,0), fx=2, fy=2)
+#         I1_foreground = foreground.copy()
+#         I2_foreground = I1_foreground.copy()
+#         I2_foreground[:, :-shift-5] = I2_foreground[:, shift+5:]
+#         I_shifted = (w1 * I1_foreground.astype(int) + w2 * I2_foreground.astype(int)).astype(int)
+#         ignore_mask = np.all(I_shifted == [255, 255, 255], axis=-1)
+#         combined_image = np.where(ignore_mask[..., np.newaxis], self.It, I_shifted)
         
-        self.It = combined_image
-        print(self.It)
-        plt.figure()
-        plt.imshow(self.It)
-        plt.show()
+#         self.It = combined_image
+#         # print(self.It)
+#         plt.figure()
+#         image_to_display = np.clip(self.It, 0, 255).astype(np.uint8)
+
+# # Display the image using plt.imshow
+#         plt.figure()
+#         plt.imshow(cv2.cvtColor(image_to_display, cv2.COLOR_BGR2RGB))
+#         plt.show()
 
         ## estimated vals
         self.estimated_shift = None
@@ -208,24 +213,13 @@ class shiftImage:
         # print(self.estimated_psf)
 
         deconvolved = sk.restoration.wiener(img, self.estimated_psf, balance=0)
+        # richard
+        # deconvolved = sk.restoration.richardson_lucy(img, self.estimated_psf, num_iter=30)
 
         # print(f"deconvolved: {deconvolved}")
 
         # Use your computeCrossCorrelation function
         shift_vals, corr_vals = self.computeCrossCorrelation(deconvolved)
-
-        # plt.figure(figsize=(12, 4))
-        # plt.subplot(1, 2, 1)
-        # plt.imshow(deconvolved, cmap='gray')
-        # plt.title('Deconvolved Image')
-
-        # plt.subplot(1, 2, 2)
-        # plt.plot(shift_vals, corr_vals)
-        # plt.title('Cross Correlation')
-        # plt.xlabel('Shift Values')
-        # plt.ylabel('Correlation Values')
-
-        # plt.show()
 
         # Find the index of the peak at zero shift
         zero_idx = np.where(shift_vals == 0)[0][0]
@@ -247,51 +241,71 @@ class shiftImage:
         savgol_filt = self.applyFilter(corr_vals)
         posidx = np.where(shift_vals == self.estimated_shift)[0][0]
         negidx = np.where(shift_vals == -self.estimated_shift)[0][0]
-        loss += abs(savgol_filt[posidx]) + abs(savgol_filt[negidx])        
+        loss += 2*(abs(savgol_filt[posidx]) + abs(savgol_filt[negidx]))        
 
         central_region_idx = np.where((shift_vals > 3) & (-shift_vals < -3))[0]
         central_region_vals = savgol_filt[central_region_idx]
         flatness_loss = np.std(central_region_vals)
-        loss += flatness_loss**2
-        # print(f"Initial loss: {loss}")
+        
+        loss += 50*flatness_loss
+
         # print("test")
         if self.min_loss is None or loss < self.min_loss:
             print(f"Newest loss is {loss} for w1: {w1_est}")
             self.min_loss = loss
             self.best_w1 = w1_est
-        # print(f"final loss: {loss} with w1: {w1_est}")
-        # plot corr vals and filtered corr
-        # plt.figure()
-        # plt.imshow(deconvolved, cmap='gray')
-        # plt.figure(figsize=(12, 4))
-        # plt.subplot(1, 2, 1)
-        # plt.plot(shift_vals, corr_vals)
-        # plt.title('Cross Correlation')
-        # plt.xlabel('Shift Values')
-        # plt.ylabel('Correlation Values')
-        # plt.subplot(1, 2, 2)
-        # plt.plot(shift_vals, savgol_filt)
-        # plt.title('Filtered Cross Correlation')
-        # plt.xlabel('Shift Values')
-        # plt.ylabel('Correlation Values')
-        # plt.show()
 
-        if loss <= 2e-4:
-            raise EarlyStoppingException(f"Early stopping: loss has reached the threshold of 2e-6")
+        # image clarty
+    
+        return loss
+    
+    def clarity_loss(self, est, img):
+        w1_est = est
+        # img = self.It.copy()
 
+        # Contrast enhance image
+        if np.max(img) > 1:
+            img = img / np.max(img)
 
+        # img = sp.ndimage.shift(img, shift=(0, -self.estimated_shift//2), mode='constant', cval=0)
+
+        # Compute PSF and perform Wiener deconvolution
+        self.getImagePSF(w1_est)
+        # print(self.estimated_psf)
+
+        deconvolved = sk.restoration.wiener(img, self.estimated_psf, balance=0)
+
+        # get clarity loss
+        sobel_x = cv2.Sobel(deconvolved, cv2.CV_64F, 1, 0, ksize=5)
+        sobel_y = cv2.Sobel(deconvolved, cv2.CV_64F, 0, 1, ksize=5)
+        sobel = np.sqrt(sobel_x**2 + sobel_y**2)
+        loss = np.mean(sobel)
         return loss
 
-    
     def opt_minimise_weights(self, w1guess, bounds, method, img):
         try:
-            result = sp.optimize.differential_evolution(self.loss_func, bounds, args=(img,))
+            result = sp.optimize.differential_evolution(self.loss_func, bounds, args=(img,), 
+                                                                        # strategy='best1bin',  # Choose the strategy for the differential evolution
+                                                                        # maxiter=1000,         # Maximum number of generations over which the entire population is evolved
+                                                                        # popsize=15,           # A multiplier for setting the total population size.
+                                                                        # tol=0.01,             # Relative tolerance for convergence.
+                                                                        # mutation=(0.5, 1),    # Mutation constant or tuple (min, max).
+                                                                        # recombination=0.7,    # Recombination constant.
+                                                                        disp=False,            # Display convergence messages
+                                                                        polish=True,          # If True, perform a final minimization using the ‘L-BFGS-B’ method.
+                                                                        workers=-1            # Use all available CPU cores for parallel computation.
+                                                                    )
+            print(f"Differential Evolution Completed \n {result}")
             w1_est_global = result.x
-            print(f"Global minimum: {w1_est_global}")
-            # result = sp.optimize.minimize(self.loss_func, w1guess, args=(img), bounds=bounds, method=method)#, options={'xtol': 1e-8, 'ftol': 1e-8, 'maxiter': 10000})#"L-BFGS-B")
-            return result.x
+            clarity_loss = self.clarity_loss(w1_est_global, img)
+            print(f"Clarity loss is {clarity_loss}")
+            other_clarity = self.clarity_loss(1-w1_est_global, img)
+            print(f"Clarity loss is {other_clarity}")
+            return result.x, result.fun, clarity_loss, other_clarity
+        
         except EarlyStoppingException as e:
             print(e)
+            
             return self.best_w1
     
     def deconvolve(self, shifted):
@@ -300,6 +314,8 @@ class shiftImage:
             shifted = shifted / np.max(shifted)
         
         deconvolved = sk.restoration.wiener(shifted, self.estimated_psf, balance=0)
+        # richard
+        # deconvolved = sk.restoration.richardson_lucy(shifted, self.estimated_psf, num_iter=30)
         # normalise deconvolved
         deconvolved = deconvolved / np.max(deconvolved)
         return deconvolved
