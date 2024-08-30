@@ -13,18 +13,19 @@ from skimage.metrics import structural_similarity as ssim
 
 
 def main():
-    path1 = "python/test_im/bird.jpg"
+    # path1 = "python/test_im/bird.jpg"
     # path1 = "python/test_im/blackwhitesquare.jpg"
     # path1 = "python/test_im/flowers.jpg"
     # path1 = "python/test_im/squareblackwhite1.jpg"
     # path1 = "python/flower.jpg"
     # path1 = "python/test_im/stonk.jpg"
     # path1 = "python/test_im/birckback.png"
-    size = 0.6
+    path1 = "python/test_im/ball/ball_0.png"
+    size = 0.3
     
     grey = False
 
-    w1 = 0.4
+    w1 = 0.45
     w2 = 1-w1
 
     shift = 12
@@ -32,6 +33,8 @@ def main():
     birdhalf = Image.Image(path1, size, grey)
 
     shiftedBirdHalf = shiftImage.shiftImage(birdhalf, w1, w2, shift)
+
+
     shiftedBirdHalf.computePixelShift()
 
 

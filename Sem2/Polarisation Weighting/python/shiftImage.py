@@ -17,13 +17,25 @@ class shiftImage:
         # self.It = img.original_image.copy()
         # shift
         I1 = img.original_image.copy()
-        I2 = I1.copy()
+        # I2 = I1.copy()
 
+        # I2[:, :-shift] = I2[:, shift:]
+        # if not self.grey:
+        #     self.It = (w1 * I1.astype(int) + w2 * I2.astype(int)).astype(int)
+        # else:
+        #     self.It = (w1 * I1 + w2 * I2)
+
+        I2 = cv2.imread("python/test_im/ball/ball_90.png")
+        I2 = cv2.resize(I2, (0,0), fx=0.3, fy=0.3)
         I2[:, :-shift] = I2[:, shift:]
-        if not self.grey:
-            self.It = (w1 * I1.astype(int) + w2 * I2.astype(int)).astype(int)
-        else:
-            self.It = (w1 * I1 + w2 * I2)
+
+        self.It = 0.5*I1 + 0.5*I2
+        self.It = np.clip(self.It, 0, 255).astype(np.uint8)
+
+        # Display the result
+        plt.figure()
+        plt.imshow(cv2.cvtColor(self.It, cv2.COLOR_BGR2RGB))
+        plt.show()
 
 #         foreground = cv2.imread("python/test_im/birdfront.png")
 #         foreground = cv2.resize(foreground, (0,0), fx=2, fy=2)
@@ -280,6 +292,13 @@ class shiftImage:
         sobel_y = cv2.Sobel(deconvolved, cv2.CV_64F, 0, 1, ksize=5)
         sobel = np.sqrt(sobel_x**2 + sobel_y**2)
         loss = np.mean(sobel)
+        
+        # visualize the sobel image
+        plt.figure()
+        plt.imshow(sobel, cmap='gray')
+        plt.title(f'Sobel Image for {w1_est}')
+        plt.show()
+        
         return loss
 
     def opt_minimise_weights(self, w1guess, bounds, method, img):
