@@ -38,7 +38,6 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
     corr_values = []
 
     if normalised:
-        # normalise img
         img = (img - np.mean(img)) / np.std(img)
     
     # loop through the shift values
@@ -46,14 +45,24 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
         # shift the iamge
         shifted_shifted_img = sp.ndimage.shift(img, shift=(0,x_shift), mode='constant', cval=0)
         # flatten for np.correlate
-        img_flat = img.flatten()
-        shifted_shifted_flat = shifted_shifted_img.flatten()
-        
         if normalised:
-            shifted_shifted_img = (shifted_shifted_img - np.mean(shifted_shifted_img)) / np.std(shifted_shifted_img)           
+            mean_shifted_val = np.mean(shifted_shifted_img)
+            std_shifted_val = np.std(shifted_shifted_img)
+            if std_shifted_val == 0:
+                std_shifted_val = 1
+
+            shifted_shifted_img = (shifted_shifted_img - mean_shifted_val) / std_shifted_val          
+
+            img_flat = img.flatten()
+            shifted_shifted_flat = shifted_shifted_img.flatten()
+
             cross_corr = np.correlate(img_flat, shifted_shifted_flat, mode='valid')/(np.linalg.norm(img_flat)*np.linalg.norm(shifted_shifted_flat))
         else:
+            img_flat = img.flatten()
+            shifted_shifted_flat = shifted_shifted_img.flatten()
+
             cross_corr = np.correlate(img_flat, shifted_shifted_flat, mode='valid')
+            
         # add max value and shift value to list
         corr_values.append(np.max(cross_corr))
         shift_values.append(x_shift)
