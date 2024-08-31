@@ -87,13 +87,13 @@ def clarity_both_imgs_w1w2(img, w1_est, w2_est, shift_val):
     deconvolved_image_w1 = sk.restoration.wiener(img, psf_w1, balance=0)
     deconvolved_image_w2 = sk.restoration.wiener(img, psf_w2, balance=0)
 
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.imshow(deconvolved_image_w1, cmap='gray')
-    plt.title(f"Clarity: {clarity_loss(deconvolved_image_w1)}")
-    plt.subplot(1, 2, 2)
-    plt.imshow(deconvolved_image_w2, cmap='gray')
-    plt.title(f"Clarity: {clarity_loss(deconvolved_image_w2)}")
+    # plt.figure()
+    # plt.subplot(1, 2, 1)
+    # plt.imshow(deconvolved_image_w1, cmap='gray')
+    # plt.title(f"Clarity: {clarity_loss(deconvolved_image_w1)}")
+    # plt.subplot(1, 2, 2)
+    # plt.imshow(deconvolved_image_w2, cmap='gray')
+    # plt.title(f"Clarity: {clarity_loss(deconvolved_image_w2)}")
 
     clarity_w1 = clarity_loss(deconvolved_image_w1)
     clarity_w2 = clarity_loss(deconvolved_image_w2)
@@ -149,6 +149,23 @@ def check_flatness(shift_vals, fitlered_corr, shift_estimate):
     non_central_vals = fitlered_corr[central_region_idx]
     flatness = 50 * np.std(non_central_vals)
     loss += flatness
+    return loss
+
+def minimise_corr_vals(corr_vals, shift_vals):
+    """
+    Minimise the correlation by adding loss for all the correlation values where shift is not 0
+    corr_vals: the correlation values
+    shift_vals: the shift values
+    """
+    zero_idx = np.where(shift_vals == 0)[0][0]
+    loss = 0
+
+    for i in range(1, zero_idx - 3):
+        loss += abs(corr_vals[i])
+
+    for i in range(zero_idx + 4, len(corr_vals)):
+        loss += abs(corr_vals[i])
+
     return loss
 
 def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
@@ -259,8 +276,10 @@ def loss_function_two_est(estimate, shifted_img, shift_val, loss_vals, w_vals):
 
     # develop loss
     loss = 0
-    loss = check_gradients(corr_filt, shift_vals)
+    # loss = check_gradients(corr_filt, shift_vals)
+    loss = check_gradients(corr_vals, shift_vals)
     loss += check_flatness(shift_vals, corr_filt, shift_val)
+    loss += minimise_corr_vals(corr_filt, shift_vals)
 
     loss_vals.append(loss)
     w_vals.append(estimate)
