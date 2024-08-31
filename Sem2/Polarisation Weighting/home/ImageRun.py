@@ -69,8 +69,8 @@ def run_estimate_w1(transformed_image):
         plt.figure()
         plt.subplot(1, 3, 1)
 
-        image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
-        deconvolved = sk.wiener(image, WeightingEstimate.get_img_psf(w1_vals[i], shift_estimation), balance=0)
+        # image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
+        deconvolved = sk.wiener(transformed_image[:, :, i], WeightingEstimate.get_img_psf(w1_vals[i], shift_estimation), balance=0)
 
         plt.imshow(deconvolved, cmap='gray')
         plt.title(f"Channel {i} Deconvolved")

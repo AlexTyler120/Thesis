@@ -45,6 +45,7 @@ def clarity_both_imgs(img, w1_est, shift_val):
     psf_w2 = get_img_psf(1 - w1_est, shift_val)
 
     if np.max(img) > 1:
+        print("Normalising as max value has been reached in clarity both imgs")
         img = img / np.max(img)
 
     deconvolved_image_w1 = sk.restoration.wiener(img, psf_w1, balance=0)
@@ -64,7 +65,7 @@ def clarity_both_imgs(img, w1_est, shift_val):
     ## return the weight depending on which clarity is lower
     print(f"Clarity w1: {clarity_w1} and Clarity w2: {clarity_w2}")
     print(f"Weight w1: {w1_est} and Weight w2: {1 - w1_est}")
-    if clarity_w2 > clarity_w1:
+    if clarity_w2 < clarity_w1:
         return 1 - w1_est
     else:
         return w1_est
@@ -82,6 +83,7 @@ def clarity_both_imgs_w1w2(img, w1_est, w2_est, shift_val):
     psf_w2 = get_img_psf_w1_w2(w2_est, w1_est, shift_val)
 
     if np.max(img) > 1:
+        print("Normalising as max value has been reached in clarity getter")
         img = img / np.max(img)
 
     deconvolved_image_w1 = sk.restoration.wiener(img, psf_w1, balance=0)
@@ -177,6 +179,7 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
     shift_val: the shift value
     """
     if np.max(shifted_img) > 1:
+        print("Normalising as max value has been reached in loss function one set")
         shifted_img = shifted_img / np.max(shifted_img)
     
     psf_estimate = get_img_psf(estimate, shift_val)
@@ -259,6 +262,7 @@ def loss_function_two_est(estimate, shifted_img, shift_val, loss_vals, w_vals):
     w1_est, w2_est = estimate
 
     if np.max(shifted_img) > 1:
+        print("Normalising as max value has been reached in loss function two set")
         shifted_img = shifted_img / np.max(shifted_img)
 
     psf_estimate = get_img_psf_w1_w2(w1_est, w2_est, shift_val)
