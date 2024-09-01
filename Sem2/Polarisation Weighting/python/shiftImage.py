@@ -99,7 +99,6 @@ class shiftImage:
 
             corr_val = np.max(cross_corr)
 
-            shift_vals.append(x_shift)
             corr_vals.append(corr_val)
 
         shift_vals = np.array(shift_vals)

@@ -2,14 +2,14 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 
-def apply_savgol_filter(corr_vals, window_size = 7, puly_order=3):
+def apply_savgol_filter(corr_vals, window_size = 7, poly_order=3):
     """
     Apply a savgol filter to the correlation values. All it is doing is smoothing the curve
     corr_vals: the correlation values to apply the filter to
     window_size: the window size of the filter
-    puly_order: the order of the polynomial to fit
+    poly_order: the order of the polynomial to fit
     """
-    return sp.signal.savgol_filter(corr_vals, window_size, puly_order)
+    return sp.signal.savgol_filter(corr_vals, window_size, poly_order)
 
 def obtain_peak_highlighted_curve(corr_vals):
     """
@@ -33,6 +33,7 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
     else:
         # times two because wanna get the extra parts around the peaks
         max_shift = est_shift_val*2
+        # max_shift = img.shape[1]//2 # doing a test to see if larger max shift gives better results due to mroe "flatness"
 
     shift_values = []
     corr_values = []

@@ -45,6 +45,39 @@ def simulated_generation(file_name, shift, resize_var, grey, weighting):
 
     return transformed_image
 
+def run_combined_optimisation(transformed_image):
+    """
+    This function runs the optimisation of the gathered weightings. This means it takes all chennel correlation values then applies optimisation.
+    transformed_image: the image to estimate the weighting for
+    """
+    shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
+
+    w1, w2 = WeightingEstimate.optimise_psf_all_channels(transformed_image, shift_estimation)
+
+    print(f"Weighting 1: {w1}")
+    print(f"Weighting 2: {w2}")
+
+    for i in range(3):
+        plt.figure()
+        plt.subplot(1, 3, 1)
+
+        # image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
+        deconvolved = sk.wiener(transformed_image[:, :, i], WeightingEstimate.get_img_psf_w1_w2(w1, w2, shift_estimation), balance=0)
+
+        plt.imshow(deconvolved, cmap='gray')
+        plt.title(f"Channel {i} Deconvolved")
+        
+        plt.subplot(1, 3, 2)
+        shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation)
+        plt.plot(shift, corr)
+        plt.title(f"Channel {i} Auto Correlation")
+        
+        plt.subplot(1, 3, 3)
+        plt.plot(shift, ac.obtain_peak_highlighted_curve(corr))
+        plt.title(f"Channel {i} Filtered Auto Correlation")
+
+    plt.show()
+
 def run_estimate_w1(transformed_image):
     """
     Run estimation only getting w1
@@ -110,8 +143,43 @@ def run_estimate_w1_w2(transformed_image):
         plt.figure()
         plt.subplot(1, 3, 1)
 
-        image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
-        deconvolved = sk.wiener(image, WeightingEstimate.get_img_psf_w1_w2(w12_vals[i][0], w12_vals[i][1], shift_estimation), balance=0)
+        # image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
+        deconvolved = sk.wiener(transformed_image[:, :, i], WeightingEstimate.get_img_psf_w1_w2(w12_vals[i][0], w12_vals[i][1], shift_estimation), balance=0)
+
+        plt.imshow(deconvolved, cmap='gray')
+        plt.title(f"Channel {i} Deconvolved")
+        
+        plt.subplot(1, 3, 2)
+        shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation)
+        plt.plot(shift, corr)
+        plt.title(f"Channel {i} Auto Correlation")
+        
+        plt.subplot(1, 3, 3)
+        plt.plot(shift, ac.obtain_peak_highlighted_curve(corr))
+        plt.title(f"Channel {i} Filtered Auto Correlation")
+
+    plt.show()
+
+def run_estimation_all_weights(transformed_image):
+    """
+    Run estimation using all psf weights
+    transformed_image: the image to estimate the weighting for
+    """
+
+    psf_vals = []
+    shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
+    for i in range(3):
+        weights = WeightingEstimate.optimise_psf_unlimit(transformed_image[:,:,i], shift_estimation)
+        psf_vals.append(weights)
+
+    print(f"Weightings: {weights}")
+
+    for i in range(3):
+        plt.figure()
+        plt.subplot(1, 3, 1)
+
+        # image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
+        deconvolved = sk.wiener(transformed_image[:, :, i], WeightingEstimate.get_img_psf_unlimit(psf_vals[i]), balance=0)
 
         plt.imshow(deconvolved, cmap='gray')
         plt.title(f"Channel {i} Deconvolved")
