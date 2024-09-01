@@ -2,9 +2,11 @@ import Images
 import ShiftEstimate
 import WeightingEstimate
 import Autocorrelation as ac
+import LocalPatching
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage import restoration as sk
+import cv2
 
 def polarised_generation(file_name, degree, resize_var, grey, shift):
     """
@@ -194,3 +196,28 @@ def run_estimation_all_weights(transformed_image):
         plt.title(f"Channel {i} Filtered Auto Correlation")
 
     plt.show()
+
+def run_local_patching(transformed_image):
+    """
+    Running an estimation but instead of doing a complete image estimation, it does a local patching estimation
+    transformed_image: the image to estimate the weighting for
+    """
+
+    psf_vals = []
+    shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
+    deconvolved_img = []
+    for i in range(3):
+        img_channel = transformed_image[:, :, i]
+        deconvolved_channel = LocalPatching.apply_deconvolution_to_patches(img_channel, shift_estimation)
+        deconvolved_img.append(deconvolved_channel)
+        plt.figure()
+        plt.imshow(deconvolved_channel, cmap='gray')
+        plt.title(f"Channel {i} Deconvolved")
+        plt.show()
+    # stack the deconvolved images
+    deconvolved_img = np.dstack(deconvolved_img)
+    # display colour image
+    plt.figure()
+    plt.imshow(cv2.cvtColor(deconvolved_img, cv2.COLOR_BGR2RGB))
+    plt.show()
+

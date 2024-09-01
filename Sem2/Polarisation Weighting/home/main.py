@@ -1,8 +1,8 @@
 import ImageRun
 def main():
-    RESIZE_VAR = 0.25
+    RESIZE_VAR = 0.2
     GREY = False
-    SIMULATED_SHIFT = 5
+    SIMULATED_SHIFT = 6
     WEIGHTING_SIM = 0.7
     ANGLE = 0
 
@@ -27,7 +27,11 @@ def main():
     ### ###
 
     ### Run estimation but estimating for every single psf value ###
-    ImageRun.run_estimation_all_weights(transformed_image)
+    # ImageRun.run_estimation_all_weights(transformed_image)
+    ### ###
+
+    ### Run estimation with local deconvolution ###
+    ImageRun.run_local_patching(transformed_image)
     ### ###
 if __name__ == "__main__":
     main()

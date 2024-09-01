@@ -138,6 +138,7 @@ def check_flatness(shift_vals, filtered_corr, shift_estimate):
     filtered_corr: the filtered correlation values
     shift_estimate: the shift estimate
     """
+
     pos_idx = np.where(shift_vals == shift_estimate)[0][0]
     neg_idx = np.where(shift_vals == -shift_estimate)[0][0]
 
@@ -407,7 +408,7 @@ def get_img_psf_unlimit(weights):
     psf = np.array(weights)
 
     # Normalize the PSF to ensure the sum is 1
-    psf = psf / np.sum(psf)
+    # psf = psf / np.sum(psf)
 
     # Expand to 2D
     psf = np.expand_dims(psf, axis=0)
