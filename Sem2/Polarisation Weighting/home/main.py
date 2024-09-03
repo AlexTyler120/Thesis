@@ -1,4 +1,5 @@
 import ImageRun
+import PatchEstimate
 def main():
     RESIZE_VAR = 0.2
     GREY = False
@@ -21,17 +22,8 @@ def main():
     ### Run estimation getting w1 and w2 ###
     # ImageRun.run_estimate_w1_w2(transformed_image)
     ### ###
-
-    ### Run estimation using all image channels ###
-    # ImageRun.run_combined_optimisation(transformed_image)
-    ### ###
-
-    ### Run estimation but estimating for every single psf value ###
-    # ImageRun.run_estimation_all_weights(transformed_image)
-    ### ###
-
-    ### Run estimation with local deconvolution ###
-    ImageRun.run_local_patching(transformed_image)
+    ### Run estimation getting w1 and w2 for patches ###
+    PatchEstimate.run_estimate_w1_w2_patches(transformed_image)
     ### ###
 if __name__ == "__main__":
     main()

@@ -70,5 +70,9 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
 
     corr_values = np.array(corr_values)
     shift_values = np.array(shift_values)
+    # plt.figure()
+    # plt.plot(shift_values, corr_values)
+    # plt.xlabel("Shift")
+    # plt.ylabel("Correlation")
 
     return shift_values, corr_values
