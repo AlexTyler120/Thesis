@@ -36,7 +36,7 @@ def sort_peaks(peaks, steepness, shift_vals):
     steepness: the steepness of the peaks
     shift_vals: the shift values
     """
-    sorted_peaks = [x for _,x in sorted(zip(steepness,peaks), reverse=True)]
+    sorted_peaks = [x for _, x in sorted(zip(steepness,peaks), reverse=True)]
     # get top 3 peaks
     top_peaks = sorted_peaks[:2]
     peak_shifts = [shift_vals[peak] for peak in top_peaks]
@@ -44,8 +44,8 @@ def sort_peaks(peaks, steepness, shift_vals):
     if abs(peak_shifts[0]) == abs(peak_shifts[1]):
         estimated_shift = abs(peak_shifts[0])
     else:
-        print("Error multiple peaks detected")
-        estimated_shift = None
+        print("Error multiple peaks detected or no peaks detected")
+        estimated_shift = 2
 
     return estimated_shift
 

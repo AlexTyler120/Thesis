@@ -134,3 +134,5 @@ def run_estimate_w1_w2(transformed_image):
     plt.imshow(np.dstack(deconvolved_all), cmap='gray')
     plt.title("Combined Deconvolved Image")
     plt.show()
+
+    return np.dstack(deconvolved_all)
