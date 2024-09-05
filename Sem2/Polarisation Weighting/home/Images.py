@@ -30,5 +30,6 @@ def create_shifted_simulation(img1, w1, shift):
     img2[:, shift:] = img1[:, :-shift]
     # combine images
     image_transformed = cv2.addWeighted(img1, w1, img2, 1-w1, 0)
+    Viewer.display_image(image_transformed, "Shifted Image", showim=True)
     # image_transformed = img1*w1 + img2*(1-w1)
     return image_transformed / np.max(image_transformed)

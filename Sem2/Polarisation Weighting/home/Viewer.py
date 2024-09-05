@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import cv2
 
-def display_image(img, title, grey=True, showim=False):
+def display_image(img, title, grey=False, showim=False):
     plt.figure(figsize=(10, 10))
     if grey:
         plt.imshow(img, cmap='gray')
