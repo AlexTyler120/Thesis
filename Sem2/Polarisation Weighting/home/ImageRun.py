@@ -18,8 +18,8 @@ def polarised_generation(file_name, degree, resize_var, grey, shift):
     shift: the amount to shift the image by
     """
 
-    path1 = "python/test_im/" + file_name + "/" + file_name + "_"+str(degree)+".png"
-    path2 = "python/test_im/" + file_name + "/" + file_name + "_"+str(degree+90)+".png"
+    path1 = "python/test_im/" + file_name + "/small_" + file_name + "_"+str(degree)+".png"
+    path2 = "python/test_im/" + file_name + "/small_" + file_name + "_"+str(degree+90)+".png"
 
     img1, _, _ = Images.read_image(path1, resize_var, grey)
     img2, _, _ = Images.read_image(path2, resize_var, grey)
@@ -54,7 +54,7 @@ def run_estimate_w1(transformed_image):
     """
 
     shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
-
+    shift_estimation = 8
     w1_vals = []
 
     print(f"Shift estimate: {shift_estimation}")
@@ -94,21 +94,45 @@ def run_estimate_w1_w2(transformed_image):
     transformed_image: the image to estimate the weighting for
     """
 
-    shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
-
+    # shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
+    shift_estimation = 5
     w12_vals = []
 
     print(f"Shift estimate: {shift_estimation}")
+    losses = []
+    # img_channel = transformed_image[:, :, i]*255
+    img_channel_grey = transformed_image[:,:,0]
+    # transformed_image_uint8 = np.clip(transformed_image * 255, 0, 255).astype(np.uint8)
 
-    for i in range(3):
-        img_channel = transformed_image[:, :, i]
-
-        est = WeightingEstimate.optimise_psf_both_weight(img_channel, shift_estimation)
-
-        w12_vals.append(est)
-
+    # # Convert the image to grayscale
+    # img_channel_grey = cv2.cvtColor(transformed_image_uint8, cv2.COLOR_BGR2GRAY)
     deconvolved_all = []
+    for i in range(3):
+        img_channel_grey = transformed_image[:, :, i]
+        # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        img_channel = clahe.apply(np.clip(img_channel_grey * 255, 0, 255).astype(np.uint8))
 
+        # Normalize the image to the range [0, 1]
+        img_channel = img_channel / np.max(img_channel)
+
+        # plt.figure()
+        # plt.imshow(img_channel)
+        # plt.show()
+
+        est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel, shift_estimation)
+        w12_vals.append([est1, est2])
+        losses.append(loss)
+
+        # deconvolve
+        deconvolved = sk.wiener(img_channel, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5)
+        deconvolved_all.append(deconvolved)
+    # stack the deconvolved images
+    deconvolved_all = np.dstack(deconvolved_all)  
+    return deconvolved_all, w12_vals
+    return sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5), w12_vals
+    deconvolved_all = []
+    print(f"Channel 0 Loss: {losses[0]}\nChannel 1 Loss: {losses[1]}\nChannel 2 Loss: {losses[2]}")
     for i in range(len(w12_vals)):
         print(f"Channel {i}: {w12_vals[i]}")
         plt.figure()
