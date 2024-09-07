@@ -104,15 +104,12 @@ def run_estimate_w1_w2(transformed_image):
     img_channel_grey = transformed_image[:,:,0]
     # transformed_image_uint8 = np.clip(transformed_image * 255, 0, 255).astype(np.uint8)
 
-    # # Convert the image to grayscale
-    # img_channel_grey = cv2.cvtColor(transformed_image_uint8, cv2.COLOR_BGR2GRAY)
     deconvolved_all = []
     for i in range(3):
         img_channel_grey = transformed_image[:, :, i]
         # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         img_channel = clahe.apply(np.clip(img_channel_grey * 255, 0, 255).astype(np.uint8))
-
         # Normalize the image to the range [0, 1]
         img_channel = img_channel / np.max(img_channel)
 

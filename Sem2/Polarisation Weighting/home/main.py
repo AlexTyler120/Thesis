@@ -36,7 +36,7 @@ def plot_quiver_on_patches(image, patch_info, psf_vectors, patch_size, overlap):
     plt.show()
 
 def main():
-    RESIZE_VAR = 0.6
+    RESIZE_VAR = 1
     GREY = False
     SIMULATED_SHIFT = 5
     WEIGHTING_SIM = 0.7
@@ -57,44 +57,25 @@ def main():
     ### Run estimation getting w1 and w2 ###
     # ImageRun.run_estimate_w1_w2(transformed_image)
     ### ###
-    patch_size = 30
-    # patch_size = 250
+    patch_size = 150
+
     patches, patch_info, overlap = PatchEstimate.seperate_imgs_into_patches(transformed_image, patch_size)
     print(f"Number of patches: {len(patches)}")
 
     deconvolved_imgs = []
     middle_patch_index = len(patches) // 2
     w12vals = []
-    # for i, patch in enumerate(patches[25:]):
+
     for i, patch in enumerate(patches):
         print(f"Processing patch {i + 1} of {len(patches)}")
-        # plt.figure()
-        # Convert the image to a compatible depth
-        # Convert the image patch to the range [0, 255]
-        patch_uint8 = np.clip(patch * 255, 0, 255).astype(np.uint8)
-
-        # Convert from BGR to RGB
-        patch_rgb = cv2.cvtColor(patch_uint8, cv2.COLOR_BGR2RGB)
-
-        # Display the image
-        # plt.imshow(patch_rgb)
-        # plt.show()
-
-        # Run PSF estimation on the patch
-        
         deconvolved_img, w12val = ImageRun.run_estimate_w1_w2(patch)
-        # plt.figure()
-        # plt.imshow(deconvolved_img, cmap='gray')
-        # plt.title("Deconvolved Image")
-        # plt.show()
         deconvolved_imgs.append(deconvolved_img)
         w12vals.append(w12val)
     print(w12vals)
     # Plot the quiver plot over the entire image
     img_combined = PatchEstimate.combine_patches_into_image_with_overlap(deconvolved_imgs, patch_info, transformed_image.shape)
+
     plt.figure()
-    img_combined = np.clip(img_combined * 255, 0, 255).astype(np.uint8)
-    img_combined = cv2.cvtColor(img_combined, cv2.COLOR_BGR2RGB)
     plt.imshow(img_combined)
     plt.show()
 
