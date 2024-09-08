@@ -334,9 +334,9 @@ def optimise_psf_both_weight(shifted_img, shift_val):
                                                 bounds=BOUNDS, 
                                                 args=(shifted_img, shift_val, loss_vals, w_vals, balance),
                                                 atol = 0.005,
-                                                disp=False,
+                                                disp=True,
                                                 polish=False, # use L-BFGS-B to polish the best result
-                                                workers=16)
+                                                workers=-1)
     
     w1_estimate = result.x[0]
     w2_estimate = result.x[1]

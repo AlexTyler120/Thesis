@@ -18,8 +18,8 @@ def polarised_generation(file_name, degree, resize_var, grey, shift):
     shift: the amount to shift the image by
     """
 
-    path1 = "python/test_im/" + file_name + "/small_" + file_name + "_"+str(degree)+".png"
-    path2 = "python/test_im/" + file_name + "/small_" + file_name + "_"+str(degree+90)+".png"
+    path1 = "python/test_im/" + file_name + "/" + file_name + "_"+str(degree)+".png"
+    path2 = "python/test_im/" + file_name + "/" + file_name + "_"+str(degree+90)+".png"
 
     img1, _, _ = Images.read_image(path1, resize_var, grey)
     img2, _, _ = Images.read_image(path2, resize_var, grey)
@@ -87,8 +87,8 @@ def run_estimate_w1(transformed_image):
         plt.title(f"Channel {i} Filtered Auto Correlation")
 
     plt.show()
-
-def run_estimate_w1_w2(transformed_image):
+    
+def run_estimate_w1_w2_patch(patch, channel):
     """
     Run estimation getting w1 and w2
     transformed_image: the image to estimate the weighting for
@@ -100,16 +100,51 @@ def run_estimate_w1_w2(transformed_image):
 
     print(f"Shift estimate: {shift_estimation}")
     losses = []
-    # img_channel = transformed_image[:, :, i]*255
-    img_channel_grey = transformed_image[:,:,0]
-    # transformed_image_uint8 = np.clip(transformed_image * 255, 0, 255).astype(np.uint8)
+    
+    img_channel_grey = patch[:, :, channel]
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    # clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
+    # img_clahe = (img_channel_grey* 65535).astype(np.uint16)
+    # img_channel = clahe.apply(img_clahe)
+    # # Normalize the image to the range [0, 1]
+    # img_channel = img_channel / np.max(img_channel)
 
+    # plt.figure()
+    # plt.subplot(1, 2, 1)
+    # plt.imshow(img_channel, cmap='gray')
+    
+
+    est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel_grey, shift_estimation)
+    w12_vals.append([est1, est2])
+    losses.append(loss)
+
+    # deconvolve
+    deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5)
+    # plt.subplot(1, 2, 2)
+    # plt.imshow(deconvolved, cmap='gray')
+    # plt.show()
+    # stack the deconvolved images
+    return deconvolved, w12_vals
+
+def run_estimate_w1_w2(transformed_image):
+    """
+    Run estimation getting w1 and w2
+    transformed_image: the image to estimate the weighting for
+    """
+
+    shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
+    # shift_estimation = 5
+    w12_vals = []
     deconvolved_all = []
+    print(f"Shift estimate: {shift_estimation}")
+    losses = []
+    
     for i in range(3):
         img_channel_grey = transformed_image[:, :, i]
         # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        img_channel = clahe.apply(np.clip(img_channel_grey * 255, 0, 255).astype(np.uint8))
+        clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
+        img_clahe = (img_channel_grey* 65535).astype(np.uint16)
+        img_channel = clahe.apply(img_clahe)
         # Normalize the image to the range [0, 1]
         img_channel = img_channel / np.max(img_channel)
 
@@ -125,10 +160,6 @@ def run_estimate_w1_w2(transformed_image):
         deconvolved = sk.wiener(img_channel, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5)
         deconvolved_all.append(deconvolved)
     # stack the deconvolved images
-    deconvolved_all = np.dstack(deconvolved_all)  
-    return deconvolved_all, w12_vals
-    return sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5), w12_vals
-    deconvolved_all = []
     print(f"Channel 0 Loss: {losses[0]}\nChannel 1 Loss: {losses[1]}\nChannel 2 Loss: {losses[2]}")
     for i in range(len(w12_vals)):
         print(f"Channel {i}: {w12_vals[i]}")
