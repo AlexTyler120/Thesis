@@ -50,7 +50,6 @@ def seperate_imgs_into_patches(img, patch_size):
     return patches, patch_info, (overlap_x, overlap_y)
 
 
-
 def combine_patches_into_image_with_overlap(patches, patch_info, original_shape):
     """
     Combine the patches back into the original image, accounting for overlap using weighted blending.
@@ -194,7 +193,7 @@ def gaussian_blend_patches(patches, patch_info, img_size, overlap):
         weight = weight_x * weight_y
         
         # Add patch to the full image with Gaussian blending
-        full_img[y0:y1, x0:x1] += patch * weight
+        full_img[y0:y1, x0:x1] += patch * weight * 255
         weight_matrix[y0:y1, x0:x1] += weight
     
     # Normalize by the accumulated weight to avoid intensity shifts

@@ -88,14 +88,12 @@ def run_estimate_w1(transformed_image):
 
     plt.show()
     
-def run_estimate_w1_w2_patch(patch, channel):
+def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     """
     Run estimation getting w1 and w2
     transformed_image: the image to estimate the weighting for
     """
 
-    # shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
-    shift_estimation = 5
     w12_vals = []
 
     print(f"Shift estimate: {shift_estimation}")
