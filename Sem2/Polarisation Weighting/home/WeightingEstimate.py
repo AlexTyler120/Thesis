@@ -308,8 +308,8 @@ def loss_function_two_est(estimate, shifted_img, shift_val, loss_vals, w_vals, b
     loss = check_gradients(corr_vals, shift_vals)
     loss += check_flatness(shift_vals, corr_filt, shift_val)
     loss += minimise_corr_vals(corr_filt, shift_vals)
-    loss += 100000 * corr_filt[shift_vals == shift_val]
-    loss += 100000 * corr_filt[shift_vals == -shift_val]
+    # loss += 100000 * corr_filt[shift_vals == shift_val]
+    # loss += 100000 * corr_filt[shift_vals == -shift_val]
 
     loss_vals.append(loss)
     w_vals.append(estimate)
@@ -329,14 +329,14 @@ def optimise_psf_both_weight(shifted_img, shift_val):
     BOUNDS = [(0, 1), (0, 1)]
     loss_vals = []
     w_vals = []
-    balance = 0.5
+    balance = 0
     result = sp.optimize.differential_evolution(loss_function_two_est, 
                                                 bounds=BOUNDS, 
                                                 args=(shifted_img, shift_val, loss_vals, w_vals, balance),
-                                                atol = 0.005,
+                                                # atol = 0.005,
                                                 disp=True,
                                                 polish=False, # use L-BFGS-B to polish the best result
-                                                workers=18)
+                                                workers=24)
     
     w1_estimate = result.x[0]
     w2_estimate = result.x[1]

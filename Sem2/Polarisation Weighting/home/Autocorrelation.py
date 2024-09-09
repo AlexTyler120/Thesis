@@ -55,10 +55,15 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
 
             # shifted_shifted_img = (shifted_shifted_img - mean_shifted_val) / std_shifted_val          
 
-            img_flat = img.flatten()
-            shifted_shifted_flat = shifted_shifted_img.flatten()
+            # img_flat = img.flatten()
+            # shifted_shifted_flat = shifted_shifted_img.flatten()
 
-            cross_corr = np.correlate(img_flat, shifted_shifted_flat, mode='valid')/(np.linalg.norm(img_flat)*np.linalg.norm(shifted_shifted_flat))
+            # cross_corr = np.correlate(img_flat, shifted_shifted_flat, mode='valid')/(np.linalg.norm(img_flat)*np.linalg.norm(shifted_shifted_flat))
+            img_cent = img - np.mean(img)
+            shifted_shifted_cent = shifted_shifted_img - np.mean(shifted_shifted_img)
+            num = np.sum(img_cent*shifted_shifted_cent)
+            den = np.sqrt(np.sum(img_cent**2)*np.sum(shifted_shifted_cent**2))
+            cross_corr = num/den
         else:
             img_flat = img.flatten()
             shifted_shifted_flat = shifted_shifted_img.flatten()

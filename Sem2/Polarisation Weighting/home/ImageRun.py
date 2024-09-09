@@ -117,7 +117,7 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     losses.append(loss)
 
     # deconvolve
-    deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5)
+    deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0)
     # plt.subplot(1, 2, 2)
     # plt.imshow(deconvolved, cmap='gray')
     # plt.show()
@@ -140,11 +140,11 @@ def run_estimate_w1_w2(transformed_image):
     for i in range(3):
         img_channel_grey = transformed_image[:, :, i]
         # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-        clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
-        img_clahe = (img_channel_grey* 65535).astype(np.uint16)
-        img_channel = clahe.apply(img_clahe)
+        # clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
+        # img_clahe = (img_channel_grey* 65535).astype(np.uint16)
+        # img_channel = clahe.apply(img_clahe)
         # Normalize the image to the range [0, 1]
-        img_channel = img_channel / np.max(img_channel)
+        img_channel = img_channel_grey / np.max(img_channel_grey)
 
         # plt.figure()
         # plt.imshow(img_channel)
@@ -155,8 +155,8 @@ def run_estimate_w1_w2(transformed_image):
         losses.append(loss)
 
         # deconvolve
-        deconvolved = sk.wiener(img_channel, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0.5)
-        deconvolved_all.append(deconvolved)
+        # deconvolved = sk.wiener(img_channel, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0)
+        # deconvolved_all.append(deconvolved)
     # stack the deconvolved images
     print(f"Channel 0 Loss: {losses[0]}\nChannel 1 Loss: {losses[1]}\nChannel 2 Loss: {losses[2]}")
     for i in range(len(w12_vals)):
