@@ -39,7 +39,8 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
     corr_values = []
 
     if normalised:
-        img = (img - np.mean(img)) / np.std(img)
+        # img = (img - np.mean(img)) / np.std(img)
+        img = img
     
     # loop through the shift values
     for x_shift in range(-max_shift, max_shift + 1):
@@ -52,7 +53,7 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
             if std_shifted_val == 0:
                 std_shifted_val = 1
 
-            shifted_shifted_img = (shifted_shifted_img - mean_shifted_val) / std_shifted_val          
+            # shifted_shifted_img = (shifted_shifted_img - mean_shifted_val) / std_shifted_val          
 
             img_flat = img.flatten()
             shifted_shifted_flat = shifted_shifted_img.flatten()

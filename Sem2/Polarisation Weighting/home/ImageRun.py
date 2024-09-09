@@ -180,12 +180,12 @@ def run_estimate_w1_w2(transformed_image):
         plt.title(f"Channel {i} Filtered Auto Correlation")
 
     # show the combined deconvolved image
-    plt.figure()
-    proper_final = np.dstack(deconvolved_all) * 255
-    proper_final = np.clip(proper_final, 0, 255).astype(np.uint8)
+    # plt.figure()
+    # proper_final = np.dstack(deconvolved_all) * 255
+    # proper_final = np.clip(proper_final, 0, 255).astype(np.uint8)
 
-    plt.imshow(cv2.cvtColor(proper_final, cv2.COLOR_BGR2RGB))
-    plt.title("Combined Deconvolved Image")
+    # plt.imshow(cv2.cvtColor(proper_final, cv2.COLOR_BGR2RGB))
+    # plt.title("Combined Deconvolved Image")
     plt.show()
 
     return np.dstack(deconvolved_all)

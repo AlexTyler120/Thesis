@@ -297,7 +297,7 @@ def loss_function_two_est(estimate, shifted_img, shift_val, loss_vals, w_vals, b
     deconvolved_img_norm = deconvolved_image / np.max(deconvolved_image)
     
     # obtain tyhe correlation values of the deconvolved image
-    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=True, normalised=True)
+    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=False, normalised=True)
 
     # apply a savgol filter to the correlation values for peak detection
     corr_filt = ac.obtain_peak_highlighted_curve(corr_vals)
@@ -336,7 +336,7 @@ def optimise_psf_both_weight(shifted_img, shift_val):
                                                 atol = 0.005,
                                                 disp=True,
                                                 polish=False, # use L-BFGS-B to polish the best result
-                                                workers=-1)
+                                                workers=18)
     
     w1_estimate = result.x[0]
     w2_estimate = result.x[1]

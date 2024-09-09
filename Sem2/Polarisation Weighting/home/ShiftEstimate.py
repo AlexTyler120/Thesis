@@ -57,9 +57,10 @@ def compute_pixel_shift(img):
     est_shifts = []
     for i in range(img.shape[2]):
         # normalise the image
-        img_norm = (img[:, :, i] - np.mean(img[:, :, i])) / np.std(img[:, :, i])
+        # img_norm = (img[:, :, i] - np.mean(img[:, :, i])) / np.std(img[:, :, i])
+        
         # compute the autocorrelation
-        shift_vals, corr_vals = ac.compute_auto_corr(img_norm, None, True)
+        shift_vals, corr_vals = ac.compute_auto_corr(img[:,:,i], None, True)
         # obtain the peaks of the correlation
         filted_corr_vals = ac.obtain_peak_highlighted_curve(corr_vals)
         # plt.figure()
