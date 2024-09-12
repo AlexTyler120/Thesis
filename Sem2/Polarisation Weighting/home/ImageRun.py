@@ -18,8 +18,8 @@ def polarised_generation(file_name, degree, resize_var, grey, shift):
     shift: the amount to shift the image by
     """
 
-    path1 = "python/test_im/" + file_name + "/" + file_name + "_"+str(degree)+".png"
-    path2 = "python/test_im/" + file_name + "/" + file_name + "_"+str(degree+90)+".png"
+    path1 = "python/test_im/" + file_name + "/small_" + file_name + "_"+str(degree)+".png"
+    path2 = "python/test_im/" + file_name + "/small_" + file_name + "_"+str(degree+90)+".png"
 
     img1, _, _ = Images.read_image(path1, resize_var, grey)
     img2, _, _ = Images.read_image(path2, resize_var, grey)
@@ -112,7 +112,9 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     # plt.imshow(img_channel, cmap='gray')
     
 
-    est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel_grey, shift_estimation)
+    # est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel_grey, shift_estimation)
+    est1, loss = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
+    est2 = 1 - est1
     w12_vals.append([est1, est2])
     losses.append(loss)
 

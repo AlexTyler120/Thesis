@@ -4,21 +4,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import pickle
-
+import PatchGetAndCombine
 def main():
-    RESIZE_VAR = 0.3
+    RESIZE_VAR = 1
     GREY = False
     SIMULATED_SHIFT = 5
     WEIGHTING_SIM = 0.7
     ANGLE = 0
-    PATCH_SIZE = 40
+    PATCH_SIZE = 12
 
     ### Shift estimates with polarised images ###
-    transformed_image = ImageRun.polarised_generation("pomegranate", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
+    transformed_image = ImageRun.polarised_generation("fakefruit", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
     ### ###
 
     ### Shift estimates with simulated images ###
-    # transformed_image = ImageRun.simulated_generation("pomegranate_0.png", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
+    # transformed_image = ImageRun.simulated_generation("small_fakefruit_0.png", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
     ### ###
 
     ### Run estimation only getting w1 ###
@@ -29,21 +29,21 @@ def main():
     # ImageRun.run_estimate_w1_w2(transformed_image)
     ### ###
     
-    rgb, r, g, b = PatchRun.process_all_chanels(transformed_image, PATCH_SIZE)
-
+    
+    rgb, r, g, b, w12 = PatchRun.process_all_chanels(transformed_image, PATCH_SIZE)
     plt.figure(figsize=(10, 10))
     plt.subplot(2,2,1)
-    plt.imshow(r*255, cmap='gray')
+    plt.imshow(r, cmap='gray')
     plt.title("Red Channel")
     plt.axis('off')
     
     plt.subplot(2,2,2)
-    plt.imshow(g*255, cmap='gray')
+    plt.imshow(g, cmap='gray')
     plt.title("Green Channel")
     plt.axis('off')
     
     plt.subplot(2,2,3)
-    plt.imshow(b*255, cmap='gray')
+    plt.imshow(b, cmap='gray')
     plt.title("Blue Channel")
     plt.axis('off')
     
@@ -51,7 +51,7 @@ def main():
     plt.imshow(rgb)
     plt.title("RGB Image")
     plt.axis('off')
-    
+    PatchGetAndCombine.create_full_quiver(rgb, transformed_image.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12)   
     plt.show()
     
     

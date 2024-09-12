@@ -6,200 +6,211 @@ import Autocorrelation
 import skimage.restoration as sk
 from scipy.interpolate import RegularGridInterpolator
 import cv2
-def seperate_imgs_into_patches(img, patch_size):
+import scipy as sp
+
+def extract_image_patches_no_overlap(image, patch_size):
     """
-    Separate an image into patches with dynamically calculated overlap, ensuring
-    all patches fit into the image evenly without leaving any areas uncovered.
+    Splits an image into patches of the specified size.
     
-    img: the image to separate
-    patch_size: the size of each patch
+    Parameters:
+    - image: Input image as a numpy array (e.g., loaded using cv2.imread).
+    - patch_size: Tuple of (patch_height, patch_width).
     
     Returns:
-    - patches: list of image patches
-    - patch_info: list of tuples containing (x0, y0, x1, y1) coordinates for each patch
-    - overlap: the automatically calculated overlap
+    - patches: List of image patches, where each patch is a numpy array.
     """
-    img_height, img_width = img.shape[:2]
-    
-    # Calculate the number of patches along the width and height
-    num_patches_x = int(np.ceil(img_width / patch_size))
-    num_patches_y = int(np.ceil(img_height / patch_size))
-    
-    # Calculate the overlap needed to ensure patches fit evenly across the image
-    step_x = img_width / num_patches_x
-    step_y = img_height / num_patches_y
-    
-    overlap_x = patch_size - step_x
-    overlap_y = patch_size - step_y
-    
     patches = []
-    patch_info = []
+    img_height, img_width = image.shape[:2]
+    patch_height, patch_width = patch_size
+    padding_size = 5 
+
+    # Loop over the image to extract patches, ignoring smaller patches at edges
+    for y in range(0, img_height, patch_height):
+        for x in range(0, img_width, patch_width):
+            # Ensure patch size is valid (no smaller patches at the edges)
+            if (y + patch_height <= img_height) and (x + patch_width <= img_width):
+                patch = image[y:y+patch_height, x:x+patch_width]
+                # Pad the patch with reflection padding on both x and y axes
+                padded_patch = cv2.copyMakeBorder(
+                    patch, padding_size, padding_size, padding_size, padding_size, 
+                    borderType=cv2.BORDER_REFLECT
+                )
+                patches.append(padded_patch)
     
-    for i in range(num_patches_x):
-        for j in range(num_patches_y):
-            x0 = int(i * step_x)
-            y0 = int(j * step_y)
-            x1 = min(x0 + patch_size, img_width)
-            y1 = min(y0 + patch_size, img_height)
-            
-            # Extract the patch
-            patch = img[y0:y1, x0:x1]
-            patches.append(patch)
-            patch_info.append((x0, y0, x1, y1))
-    
-    return patches, patch_info, (overlap_x, overlap_y)
+    return patches
 
 
-def combine_patches_into_image_with_overlap(patches, patch_info, original_shape):
+def reconstruct_image_from_patches_no_overlap(patches, image_size, patch_size):
     """
-    Combine the patches back into the original image, accounting for overlap using weighted blending.
+    Reconstructs an image from patches.
     
-    patches: list of deconvolved image patches
-    patch_info: list of tuples containing (x0, y0, x1, y1) coordinates for each patch
-    original_shape: shape of the original image (height, width, channels)
+    Parameters:
+    - patches: List of image patches, where each patch is a numpy array.
+    - image_size: Tuple of (image_height, image_width) representing the original image size.
+    - patch_size: Tuple of (patch_height, patch_width) representing the size of each patch.
     
-    Returns the re-constructed image.
+    Returns:
+    - reconstructed_image: The reconstructed image as a numpy array.
     """
-    # Create a blank image and a weight map to handle overlaps
-    reconstructed_image = np.zeros(original_shape[:2])
-    weight_map = np.zeros(original_shape[:2])
-    
-    # Reconstruct the image by placing each patch at its original location
-    for patch, (x0, y0, x1, y1) in zip(patches, patch_info):
-        patch_height, patch_width = patch.shape[:2]
-        # Create a weight matrix for blending. Use a linear gradient (e.g., from 0 to 1) across the patch.
-        weight_x = np.linspace(0, 1, patch_width).reshape(1, -1)
-        weight_y = np.linspace(0, 1, patch_height).reshape(-1, 1)
-        
-        # Compute the final weight as the outer product of the two gradients
-        weight = np.minimum(weight_x, weight_y)  # More complex blending can use np.outer(weight_x, weight_y)
-        # rgb
-        # weight_rgb = np.dstack([weight] * 3)
-        # Apply the patch and its weight to the respective region in the image
-        reconstructed_image[y0:y1, x0:x1] += patch * weight
-        weight_map[y0:y1, x0:x1] += weight
-    
-    # Avoid division by zero in areas without patches
-    weight_map[weight_map == 0] = 1
-    
-    # Normalize the reconstructed image by dividing by the weight map
-    reconstructed_image /= weight_map
-    # reconstructed_image /= np.dstack([weight_map] * 3)
+    image_height, image_width = image_size
+    patch_height, patch_width = patch_size
+    padding_size = 5
+    # Create an empty array for the reconstructed image
+    reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
+
+    patch_idx = 0
+    # Loop over the image to place patches in the correct position
+    for y in range(0, image_height, patch_height):
+        for x in range(0, image_width, patch_width):
+            # Ensure we are not placing smaller patches (ignored at edges)
+            if (y + patch_height <= image_height) and (x + patch_width <= image_width):
+                # Remove the padding by cropping the padding from all sides
+                patch = patches[patch_idx]
+                cropped_patch = patch[padding_size:-padding_size, padding_size:-padding_size]
+                # Place the cropped patch back into the image
+                reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_patch
+                patch_idx += 1
     
     return reconstructed_image
 
-def blend_patches(patches, patch_info, img_size, overlap):
+def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, patch_size, w12_vals, channel):
     """
-    Reconstruct the full image from patches using a linear blending technique.
+    Reconstructs an image from patches and adds a single quiver arrow for each patch based on dx, dy values.
     
-    patches: list of image patches
-    patch_info: list of tuples containing (x0, y0, x1, y1) coordinates for each patch
-    img_size: size of the original image (height, width)
-    overlap: the overlap (overlap_x, overlap_y)
+    Parameters:
+    - patches: List of image patches, where each patch is a numpy array.
+    - image_size: Tuple of (image_height, image_width) representing the original image size.
+    - patch_size: Tuple of (patch_height, patch_width) representing the size of each patch.
+    - w12_vals: List of tuples (U, V) representing the dx, dy values for quiver plots for each patch.
     
     Returns:
-    - full_img: the reconstructed full image with blended patches
+    - reconstructed_image: The reconstructed image as a numpy array.
     """
-    img_height, img_width = img_size
-    overlap_x, overlap_y = overlap
+    image_height, image_width = image_size
+    patch_height, patch_width = patch_size
+    padding_size = 5
     
-    # Create an empty image to reconstruct
-    full_img = np.zeros((img_height, img_width), dtype=np.float32)
-    
-    # Create a weight matrix to accumulate blending weights
-    weight_matrix = np.zeros((img_height, img_width), dtype=np.float32)
-    
-    for patch, (x0, y0, x1, y1) in zip(patches, patch_info):
-        patch_height, patch_width = patch.shape[:2]
-        
-        # Create blending weights for this patch
-        weight_x = np.ones((patch_height, 1))
-        weight_y = np.ones((1, patch_width))
-        
-        if overlap_x > 0:
-            weight_x = np.linspace(1, 0, int(overlap_x), endpoint=False).reshape(-1, 1)
-            weight_x = np.vstack((weight_x, np.ones(patch_height - int(overlap_x)).reshape(-1, 1)))
+    # Create an empty array for the reconstructed image
+    reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
 
-        if overlap_y > 0:
-            weight_y = np.linspace(1, 0, int(overlap_y), endpoint=False).reshape(1, -1)
-            weight_y = np.hstack((weight_y, np.ones(patch_width - int(overlap_y)).reshape(1, -1)))
+    patch_idx = 0
+    X_quiver = []
+    Y_quiver = []
+    U_quiver = []
+    V_quiver = []
 
-        weight = weight_x * weight_y
-        
-        # Add patch to the full image with blending
-        full_img[y0:y1, x0:x1] += patch * weight
-        weight_matrix[y0:y1, x0:x1] += weight
-    
-    # Normalize by the accumulated weight to avoid intensity shifts
-    full_img /= (weight_matrix)  # Avoid division by zero
-    
-    # Clip to valid image range
-    full_img = np.clip(full_img, 0, 255).astype(np.uint8)
-    
-    return full_img
+    # Loop over the image to place patches in the correct position
+    for y in range(0, image_height, patch_height):
+        for x in range(0, image_width, patch_width):
+            # Ensure we are not placing smaller patches (ignored at edges)
+            if (y + patch_height <= image_height) and (x + patch_width <= image_width):
+                # Remove the padding by cropping the padding from all sides
+                patch = patches[patch_idx]
+                cropped_patch = patch[padding_size:-padding_size, padding_size:-padding_size]
+                
+                # Place the cropped patch back into the image
+                reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_patch
+                
+                # Get the quiver dx, dy values for this patch
+                U, V = w12_vals[patch_idx]  # Assuming w12_vals contains (U, V) for each patch
+                if U > V:
+                    U = -U
+                    V = -V
 
-def gaussian_blend_patches(patches, patch_info, img_size, overlap):
+                # Calculate the center of the current patch
+                center_x = x + patch_width // 2
+                center_y = y + patch_height // 2
+
+                # Store the center and the quiver values
+                X_quiver.append(center_x)
+                Y_quiver.append(center_y)
+                U_quiver.append(U)
+                V_quiver.append(V)
+
+                patch_idx += 1
+
+    # Plot the reconstructed image with one quiver arrow per patch
+    if channel == 0:
+        colour = 'red'
+    elif channel == 1:
+        colour = 'green'
+    elif channel == 2:
+        colour = 'blue'
+    else:
+        colour = 'black'    
+    
+    plt.figure(figsize=(10, 10))
+    plt.imshow(reconstructed_image, cmap='gray')
+    plt.quiver(X_quiver, Y_quiver, U_quiver, V_quiver, color=colour, angles='xy', scale_units='xy', scale=0.1)
+    plt.title(f"Reconstructed Image with Single Quiver Arrow per Patch for channel {colour}")
+    
+    return reconstructed_image
+
+def create_full_quiver(image, image_size, patch_size, w12_vals):
+    image_height, image_width = image_size
+    patch_height, patch_width = patch_size
+    patch_idx = 0
+    X_quiver = []
+    Y_quiver = []
+    U_quiver = []
+    V_quiver = []
+    for y in range(0, image_height, patch_height):
+        for x in range(0, image_width, patch_width):
+            if (y + patch_height <= image_height) and (x + patch_width <= image_width):
+                # Get the quiver dx, dy values for this patch
+                U, V = w12_vals[patch_idx]  # Assuming w12_vals contains (U, V) for each patch
+                if U > V:
+                    U = -U
+                    # V = -V
+                    
+                # Calculate the center of the current patch
+                center_x = x + patch_width // 2
+                center_y = y + patch_height // 2
+
+                # Store the center and the quiver values
+                X_quiver.append(center_x)
+                Y_quiver.append(center_y)
+                U_quiver.append(U)
+                V_quiver.append(V)
+
+                patch_idx += 1
+    plt.figure(figsize=(10, 10))
+    plt.imshow(image)
+    plt.quiver(X_quiver, Y_quiver, U_quiver, V_quiver, color='black', angles='xy', scale_units='xy', scale=0.1)
+    plt.title(f"Reconstructed Image with Single Quiver Arrow per Patch for rgb")
+    
+def reconstruct_image_from_patches_with_overlap(patches, image_size, patch_size, stride_y, stride_x):
     """
-    Reconstruct the full image from patches using Gaussian blending technique.
+    Reconstructs an image from overlapping patches by blending the overlaps.
     
-    patches: list of image patches
-    patch_info: list of tuples containing (x0, y0, x1, y1) coordinates for each patch
-    img_size: size of the original image (height, width)
-    overlap: the overlap (overlap_x, overlap_y)
+    Parameters:
+    - patches: List of windowed, overlapping image patches, where each patch is a numpy array.
+    - image_size: Tuple of (image_height, image_width) representing the original image size.
+    - patch_size: Tuple of (patch_height, patch_width) representing the size of each patch.
+    - stride_y: Integer representing the vertical stride (patch_height - overlap_size).
+    - stride_x: Integer representing the horizontal stride (patch_width - overlap_size).
     
     Returns:
-    - full_img: the reconstructed full image with Gaussian blended patches
+    - reconstructed_image: The reconstructed image as a numpy array.
     """
-    img_height, img_width = img_size
-    overlap_x, overlap_y = overlap
+    image_height, image_width = image_size
+    patch_height, patch_width = patch_size
     
-    # Create an empty image to reconstruct
-    full_img = np.zeros((img_height, img_width), dtype=np.float32)
-    
-    # Create a weight matrix to accumulate blending weights
-    weight_matrix = np.zeros((img_height, img_width), dtype=np.float32)
-    
-    # Define Gaussian kernel for smoothing
-    def gaussian_kernel(size, sigma=1):
-        if size <= 1:
-            print(f"No overlap for size {size}")
-            return np.ones(1)  # If there's no overlap, return ones
-        kernel_1d = np.linspace(-(size // 2), size // 2, size)
-        gauss = np.exp(-0.5 * (kernel_1d / sigma) ** 2)
-        gauss = gauss / gauss.sum()
-        return gauss
-    
-    # Create Gaussian weights for overlap regions
-    gauss_x = gaussian_kernel(int(overlap_x * 2)) if overlap_x > 0 else np.ones(1)
-    gauss_y = gaussian_kernel(int(overlap_y * 2)) if overlap_y > 0 else np.ones(1)
-    
-    for patch, (x0, y0, x1, y1) in zip(patches, patch_info):
-        patch_height, patch_width = patch.shape[:2]
-        
-        # Create blending weights for this patch
-        weight_x = np.ones((patch_height, 1))
-        weight_y = np.ones((1, patch_width))
-        
-        if overlap_x > 0:
-            # Make sure the sizes match before stacking
-            overlap_len_x = min(len(gauss_x[:int(overlap_x)]), patch_height)
-            weight_x = np.vstack((gauss_x[:overlap_len_x].reshape(-1, 1), np.ones(patch_height - overlap_len_x).reshape(-1, 1)))
+    # Create empty arrays for the reconstructed image and a weight matrix
+    reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
+    weight_matrix = np.zeros((image_height, image_width), dtype=np.float32)
 
-        if overlap_y > 0:
-            # Make sure the sizes match before stacking
-            overlap_len_y = min(len(gauss_y[:int(overlap_y)]), patch_width)
-            weight_y = np.hstack((gauss_y[:overlap_len_y].reshape(1, -1), np.ones(patch_width - overlap_len_y).reshape(1, -1)))
+    patch_idx = 0
+    # Loop over the image to place patches in the correct position
+    for y in range(0, image_height - patch_height + 1, stride_y):
+        for x in range(0, image_width - patch_width + 1, stride_x):
+            patch = patches[patch_idx]
+            reconstructed_image[y:y+patch_height, x:x+patch_width] += patch
+            weight_matrix[y:y+patch_height, x:x+patch_width] += 1  # Track the number of overlaps
+            patch_idx += 1
+    
+    # Normalize the reconstructed image by dividing by the weight matrix to blend overlaps
+    reconstructed_image /= np.maximum(weight_matrix, 1)  # Avoid division by zero
+    
+    return reconstructed_image
 
-        weight = weight_x * weight_y
-        
-        # Add patch to the full image with Gaussian blending
-        full_img[y0:y1, x0:x1] += patch * weight * 255
-        weight_matrix[y0:y1, x0:x1] += weight
-    
-    # Normalize by the accumulated weight to avoid intensity shifts
-    full_img /= (weight_matrix + 1e-6)  # Avoid division by zero
-    
-    # Clip to valid image range
-    full_img = np.clip(full_img, 0, 255).astype(np.uint8)
-    
-    return full_img

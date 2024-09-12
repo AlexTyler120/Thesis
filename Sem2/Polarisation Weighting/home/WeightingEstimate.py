@@ -211,8 +211,12 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
 
     # develop loss
     loss = 0
-    loss = check_gradients(corr_filt, shift_vals)
+    # loss = check_gradients(corr_filt, shift_vals)
+    # loss += check_flatness(shift_vals, corr_filt, shift_val)
+    loss = check_gradients(corr_vals, shift_vals)
     loss += check_flatness(shift_vals, corr_filt, shift_val)
+    # loss += minimise_corr_vals(corr_filt, shift_vals)
+    loss += minimise_corr_vals(corr_vals, shift_vals)
 
     loss_vals.append(loss)
     w1_vals.append(estimate)
@@ -238,14 +242,14 @@ def optimise_psf(shifted_img, shift_val):
                                                 args=(shifted_img, shift_val, loss_vals, w1_vals),
                                                 disp=True,
                                                 polish=True, # use L-BFGS-B to polish the best result
-                                                workers=-1)
+                                                workers=24)
     
     w1_estimate = result.x
     loss_value = result.fun
     
     est_w1 = clarity_both_imgs(shifted_img, w1_estimate, shift_val)
 
-    return est_w1
+    return est_w1, loss_value
 
 def deconvolve_img(img, psf, balance):
     """
@@ -333,7 +337,8 @@ def optimise_psf_both_weight(shifted_img, shift_val):
     result = sp.optimize.differential_evolution(loss_function_two_est, 
                                                 bounds=BOUNDS, 
                                                 args=(shifted_img, shift_val, loss_vals, w_vals, balance),
-                                                # atol = 0.005,
+                                                # popsize=25,    # Increase population size (default is 15)
+                                                # tol=1e-8,      # Reduce tolerance for stopping
                                                 disp=True,
                                                 polish=False, # use L-BFGS-B to polish the best result
                                                 workers=24)

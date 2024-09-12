@@ -80,5 +80,7 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
     # plt.plot(shift_values, corr_values)
     # plt.xlabel("Shift")
     # plt.ylabel("Correlation")
+    # plt.show()
+    
 
     return shift_values, corr_values

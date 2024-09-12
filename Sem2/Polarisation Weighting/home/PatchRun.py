@@ -4,7 +4,8 @@ import ShiftEstimate
 import cv2
 import pickle
 import matplotlib.pyplot as plt
-
+import Viewer
+import numpy as np
 def get_patches(img, patch):
     """
     Get patches from an image.
@@ -84,11 +85,12 @@ def process_channel(patches, channel, shift, save_data = False):
     channel_path = f"/home/alext12/Desktop/Thesis/Sem2/Polarisation Weighting/channel{channel}/"
     for i, patch in enumerate(patches):
         print(f"Processing patch {i + 1} of {len(patches)} channel {channel}")
+        print(f"Patch shape: {patch.shape}")
         deconvolved_img, w12val = ImageRun.run_estimate_w1_w2_patch(patch, channel, shift)
         if save_data:
             cv2.imwrite(f"{channel_path}patch_{i}.png", deconvolved_img*255)
         deconvolved_imgs.append(deconvolved_img)
-        w12_vals.append(w12val)
+        w12_vals.append(w12val[0])
     
     if save_data:
         with open(f'{channel_path}w12vals.pkl', 'wb') as f:
@@ -102,20 +104,24 @@ def process_all_chanels(blurred_img, PATCH_SIZE):
     GREEN_CHANNEL = 1
     BLUE_CHANNEL = 2
     
-    shift_estimation = ShiftEstimate.compute_pixel_shift(blurred_img)
+    # shift_estimation = ShiftEstimate.compute_pixel_shift(blurred_img)
+    shift_estimation = 5
     print(f"Shift estimate: {shift_estimation}")
-    patches, patch_info, overlap = get_patches(blurred_img, PATCH_SIZE)
+    # patches, patch_info, overlap = get_patches(blurred_img, PATCH_SIZE)
+    patches = PatchGetAndCombine.extract_image_patches_no_overlap(blurred_img, (PATCH_SIZE, PATCH_SIZE))
+    
     
     deconvolved_imgs_r, w12_vals_r = process_channel(patches, RED_CHANNEL, shift_estimation, save_data=False)
+    _ = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap_with_quiver(deconvolved_imgs_r, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12_vals_r, 0)
     deconvolved_imgs_g, w12_vals_g = process_channel(patches, GREEN_CHANNEL, shift_estimation, save_data=False)
+    _ = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap_with_quiver(deconvolved_imgs_g, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12_vals_g, 1)
     deconvolved_imgs_b, w12_vals_b = process_channel(patches, BLUE_CHANNEL, shift_estimation, save_data=False) 
-    overlap = (overlap[0]*3, overlap[1]*3)
-    combined_r = PatchGetAndCombine.gaussian_blend_patches(deconvolved_imgs_r, patch_info, blurred_img.shape[:2], overlap)
-    plt.figure()
-    plt.imshow(combined_r, cmap='gray')
-    plt.show()
-    combined_g = PatchGetAndCombine.gaussian_blend_patches(deconvolved_imgs_g, patch_info, blurred_img.shape[:2], overlap)
-    combined_b = PatchGetAndCombine.gaussian_blend_patches(deconvolved_imgs_b, patch_info, blurred_img.shape[:2], overlap)
+    _ = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap_with_quiver(deconvolved_imgs_b, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12_vals_b, 2)
+
+    combined_r = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap(deconvolved_imgs_r, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE))
+    combined_g = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap(deconvolved_imgs_g, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE))
+    combined_b = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap(deconvolved_imgs_b, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE))
+
     combined_rgb = combine_to_rgb(combined_r, combined_g, combined_b)
-    
-    return combined_rgb, combined_r, combined_g, combined_b
+    combined_w12 = np.mean([w12_vals_r, w12_vals_g, w12_vals_b], axis=0)
+    return combined_rgb, combined_r, combined_g, combined_b, combined_w12
