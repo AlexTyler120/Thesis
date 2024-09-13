@@ -7,8 +7,8 @@ import skimage.restoration as sk
 from scipy.interpolate import RegularGridInterpolator
 import cv2
 import scipy as sp
-
-def extract_image_patches_no_overlap(image, patch_size):
+from scipy.interpolate import griddata
+def extract_image_patches_no_overlap(image, patch_size, shift):
     """
     Splits an image into patches of the specified size.
     
@@ -22,7 +22,7 @@ def extract_image_patches_no_overlap(image, patch_size):
     patches = []
     img_height, img_width = image.shape[:2]
     patch_height, patch_width = patch_size
-    padding_size = 5 
+    padding_size = shift
 
     # Loop over the image to extract patches, ignoring smaller patches at edges
     for y in range(0, img_height, patch_height):
@@ -40,7 +40,7 @@ def extract_image_patches_no_overlap(image, patch_size):
     return patches
 
 
-def reconstruct_image_from_patches_no_overlap(patches, image_size, patch_size):
+def reconstruct_image_from_patches_no_overlap(patches, image_size, patch_size, shift):
     """
     Reconstructs an image from patches.
     
@@ -54,7 +54,7 @@ def reconstruct_image_from_patches_no_overlap(patches, image_size, patch_size):
     """
     image_height, image_width = image_size
     patch_height, patch_width = patch_size
-    padding_size = 5
+    padding_size = shift
     # Create an empty array for the reconstructed image
     reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
 
@@ -73,7 +73,7 @@ def reconstruct_image_from_patches_no_overlap(patches, image_size, patch_size):
     
     return reconstructed_image
 
-def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, patch_size, w12_vals, channel):
+def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, patch_size, w12_vals, channel, shift):
     """
     Reconstructs an image from patches and adds a single quiver arrow for each patch based on dx, dy values.
     
@@ -88,7 +88,7 @@ def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, p
     """
     image_height, image_width = image_size
     patch_height, patch_width = patch_size
-    padding_size = 5
+    padding_size = shift
     
     # Create an empty array for the reconstructed image
     reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
@@ -113,9 +113,9 @@ def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, p
                 
                 # Get the quiver dx, dy values for this patch
                 U, V = w12_vals[patch_idx]  # Assuming w12_vals contains (U, V) for each patch
-                if U > V:
-                    U = -U
-                    V = -V
+                # if U > V:
+                #     U = -U
+                #     V = -V
 
                 # Calculate the center of the current patch
                 center_x = x + patch_width // 2
@@ -154,14 +154,18 @@ def create_full_quiver(image, image_size, patch_size, w12_vals):
     Y_quiver = []
     U_quiver = []
     V_quiver = []
+    
+    magnitudes = []
+    angles = []
+    
     for y in range(0, image_height, patch_height):
         for x in range(0, image_width, patch_width):
             if (y + patch_height <= image_height) and (x + patch_width <= image_width):
                 # Get the quiver dx, dy values for this patch
                 U, V = w12_vals[patch_idx]  # Assuming w12_vals contains (U, V) for each patch
-                if U > V:
-                    U = -U
-                    # V = -V
+                # if U > V:
+                #     U = -U
+                #     V = -V
                     
                 # Calculate the center of the current patch
                 center_x = x + patch_width // 2
@@ -172,45 +176,38 @@ def create_full_quiver(image, image_size, patch_size, w12_vals):
                 Y_quiver.append(center_y)
                 U_quiver.append(U)
                 V_quiver.append(V)
+                
+                # Calculate the magnitude of the vector
+                magnitude = np.sqrt(U**2 + V**2)
+                magnitudes.append(magnitude)
+                
+                angle = np.arctan2(V, U)
+                angles.append(angle)
 
                 patch_idx += 1
+                
     plt.figure(figsize=(10, 10))
     plt.imshow(image)
     plt.quiver(X_quiver, Y_quiver, U_quiver, V_quiver, color='black', angles='xy', scale_units='xy', scale=0.1)
     plt.title(f"Reconstructed Image with Single Quiver Arrow per Patch for rgb")
     
-def reconstruct_image_from_patches_with_overlap(patches, image_size, patch_size, stride_y, stride_x):
-    """
-    Reconstructs an image from overlapping patches by blending the overlaps.
-    
-    Parameters:
-    - patches: List of windowed, overlapping image patches, where each patch is a numpy array.
-    - image_size: Tuple of (image_height, image_width) representing the original image size.
-    - patch_size: Tuple of (patch_height, patch_width) representing the size of each patch.
-    - stride_y: Integer representing the vertical stride (patch_height - overlap_size).
-    - stride_x: Integer representing the horizontal stride (patch_width - overlap_size).
-    
-    Returns:
-    - reconstructed_image: The reconstructed image as a numpy array.
-    """
-    image_height, image_width = image_size
-    patch_height, patch_width = patch_size
-    
-    # Create empty arrays for the reconstructed image and a weight matrix
-    reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
-    weight_matrix = np.zeros((image_height, image_width), dtype=np.float32)
+    # Convert to numpy arrays
+    X_quiver = np.array(X_quiver)
+    Y_quiver = np.array(Y_quiver)
+    magnitudes = np.array(magnitudes)
+    angles = np.degrees(np.array(angles))
 
-    patch_idx = 0
-    # Loop over the image to place patches in the correct position
-    for y in range(0, image_height - patch_height + 1, stride_y):
-        for x in range(0, image_width - patch_width + 1, stride_x):
-            patch = patches[patch_idx]
-            reconstructed_image[y:y+patch_height, x:x+patch_width] += patch
-            weight_matrix[y:y+patch_height, x:x+patch_width] += 1  # Track the number of overlaps
-            patch_idx += 1
-    
-    # Normalize the reconstructed image by dividing by the weight matrix to blend overlaps
-    reconstructed_image /= np.maximum(weight_matrix, 1)  # Avoid division by zero
-    
-    return reconstructed_image
+    # Create a grid for the entire image
+    X_grid, Y_grid = np.meshgrid(np.arange(0, image_width), np.arange(0, image_height))
+    print(f"min and max angles: {np.min(angles)}, {np.max(angles)}")
+    # Interpolate magnitudes across the grid
+    smooth_magnitudes = griddata((X_quiver, Y_quiver), angles, (X_grid, Y_grid), method='cubic')
 
+    # Plot the original image with the smooth gradient overlay
+    plt.figure(figsize=(10, 10))
+    plt.imshow(image, alpha = 0.4)
+    plt.imshow(smooth_magnitudes, cmap='viridis', alpha=0.6)  # Smooth gradient overlay
+    plt.colorbar(label="Gradient Angles")  # Add a colorbar to show the scale
+    plt.title("Smooth Gradient Plot Over Image")
+    
+    

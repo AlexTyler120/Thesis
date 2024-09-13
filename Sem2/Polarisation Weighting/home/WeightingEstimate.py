@@ -176,7 +176,7 @@ def minimise_corr_vals(corr_vals, shift_vals):
     zero_idx = np.where(shift_vals == 0)[0][0]
     loss = 0
 
-    for i in range(1, zero_idx - 3):
+    for i in range(0, zero_idx - 4):
         loss += abs(corr_vals[i])
 
     for i in range(zero_idx + 4, len(corr_vals)):
@@ -241,7 +241,7 @@ def optimise_psf(shifted_img, shift_val):
                                                 bounds=[BOUNDS], 
                                                 args=(shifted_img, shift_val, loss_vals, w1_vals),
                                                 disp=True,
-                                                polish=True, # use L-BFGS-B to polish the best result
+                                                polish=False, # use L-BFGS-B to polish the best result
                                                 workers=24)
     
     w1_estimate = result.x

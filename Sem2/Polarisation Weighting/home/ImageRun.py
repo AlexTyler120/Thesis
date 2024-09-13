@@ -54,7 +54,6 @@ def run_estimate_w1(transformed_image):
     """
 
     shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
-    shift_estimation = 8
     w1_vals = []
 
     print(f"Shift estimate: {shift_estimation}")
@@ -71,7 +70,6 @@ def run_estimate_w1(transformed_image):
         plt.figure()
         plt.subplot(1, 3, 1)
 
-        # image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
         deconvolved = sk.wiener(transformed_image[:, :, i], WeightingEstimate.get_img_psf(w1_vals[i], shift_estimation), balance=0)
 
         plt.imshow(deconvolved, cmap='gray')
@@ -97,26 +95,15 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     w12_vals = []
 
     print(f"Shift estimate: {shift_estimation}")
-    losses = []
+    # losses = []
     
     img_channel_grey = patch[:, :, channel]
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    # clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
-    # img_clahe = (img_channel_grey* 65535).astype(np.uint16)
-    # img_channel = clahe.apply(img_clahe)
-    # # Normalize the image to the range [0, 1]
-    # img_channel = img_channel / np.max(img_channel)
-
-    # plt.figure()
-    # plt.subplot(1, 2, 1)
-    # plt.imshow(img_channel, cmap='gray')
     
-
     # est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel_grey, shift_estimation)
     est1, loss = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
     est2 = 1 - est1
-    w12_vals.append([est1, est2])
-    losses.append(loss)
+    w12_vals = [est1, est2]
+    losses = loss
 
     # deconvolve
     deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0)
@@ -141,11 +128,6 @@ def run_estimate_w1_w2(transformed_image):
     
     for i in range(3):
         img_channel_grey = transformed_image[:, :, i]
-        # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-        # clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
-        # img_clahe = (img_channel_grey* 65535).astype(np.uint16)
-        # img_channel = clahe.apply(img_clahe)
-        # Normalize the image to the range [0, 1]
         img_channel = img_channel_grey / np.max(img_channel_grey)
 
         # plt.figure()
@@ -181,13 +163,6 @@ def run_estimate_w1_w2(transformed_image):
         plt.plot(shift, ac.obtain_peak_highlighted_curve(corr))
         plt.title(f"Channel {i} Filtered Auto Correlation")
 
-    # show the combined deconvolved image
-    # plt.figure()
-    # proper_final = np.dstack(deconvolved_all) * 255
-    # proper_final = np.clip(proper_final, 0, 255).astype(np.uint8)
-
-    # plt.imshow(cv2.cvtColor(proper_final, cv2.COLOR_BGR2RGB))
-    # plt.title("Combined Deconvolved Image")
     plt.show()
 
     return np.dstack(deconvolved_all)

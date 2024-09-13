@@ -11,7 +11,7 @@ def main():
     SIMULATED_SHIFT = 5
     WEIGHTING_SIM = 0.7
     ANGLE = 0
-    PATCH_SIZE = 12
+    PATCH_SIZE = 10
 
     ### Shift estimates with polarised images ###
     transformed_image = ImageRun.polarised_generation("fakefruit", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
