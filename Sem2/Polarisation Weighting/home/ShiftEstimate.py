@@ -1,6 +1,7 @@
 import numpy as np
 import Autocorrelation as ac
 import matplotlib.pyplot as plt
+import scipy as sp
 
 def obtain_correlation_peaks(shift_vals, corr_vals):
     """
@@ -61,11 +62,20 @@ def compute_pixel_shift(img):
         
         # compute the autocorrelation
         shift_vals, corr_vals = ac.compute_auto_corr(img[:,:,i], None, True)
+        plt.figure()
+        plt.plot(shift_vals, corr_vals)
+        plt.xlabel("Pixel Shift Values")
+        plt.ylabel("Maximum Correlation Value")
+        plt.title("Normalised Cross-Correlation")
+        plt.show()
         # obtain the peaks of the correlation
         filted_corr_vals = ac.obtain_peak_highlighted_curve(corr_vals)
-        # plt.figure()
-        # plt.plot(shift_vals, filted_corr_vals)
-        # plt.show()
+        plt.figure()
+        plt.plot(shift_vals, filted_corr_vals)
+        plt.xlabel("Pixel Shift Values")
+        plt.ylabel("Baseline Subtracted Correlation Value")
+        plt.title("Filtered Cross-Correlation")
+        plt.show()
         # obtain the peaks of the correlation
         peaks, steepness = obtain_correlation_peaks(shift_vals, filted_corr_vals)
 

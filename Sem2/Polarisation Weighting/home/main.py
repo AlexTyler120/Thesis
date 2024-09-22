@@ -9,16 +9,16 @@ def main():
     RESIZE_VAR = 1
     GREY = False
     SIMULATED_SHIFT = 5
-    WEIGHTING_SIM = 0.7
+    WEIGHTING_SIM = 0.6
     ANGLE = 0
-    PATCH_SIZE = 10
+    PATCH_SIZE = 12
 
     ### Shift estimates with polarised images ###
     transformed_image = ImageRun.polarised_generation("fakefruit", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
     ### ###
 
     ### Shift estimates with simulated images ###
-    # transformed_image = ImageRun.simulated_generation("small_fakefruit_0.png", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
+    # transformed_image = ImageRun.simulated_generation("flowerfull.jpg", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
     ### ###
 
     ### Run estimation only getting w1 ###

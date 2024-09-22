@@ -106,7 +106,7 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     losses = loss
 
     # deconvolve
-    deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0)
+    deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), balance=0)
     # plt.subplot(1, 2, 2)
     # plt.imshow(deconvolved, cmap='gray')
     # plt.show()

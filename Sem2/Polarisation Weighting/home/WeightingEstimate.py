@@ -241,6 +241,7 @@ def optimise_psf(shifted_img, shift_val):
                                                 bounds=[BOUNDS], 
                                                 args=(shifted_img, shift_val, loss_vals, w1_vals),
                                                 disp=True,
+                                                tol = 0.01,
                                                 polish=False, # use L-BFGS-B to polish the best result
                                                 workers=24)
     

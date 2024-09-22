@@ -6,12 +6,13 @@ def read_image(path, size, grey):
     image = cv2.imread(path)
     if grey:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # plt.figure()
-    # plt.imshow(image)
-    # plt.show()
     image = cv2.resize(image, (0,0), fx=size, fy=size)
     height = image.shape[0]
     width = image.shape[1]
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    plt.figure()
+    plt.imshow(image_rgb)
+    plt.show()
 
     return image, height, width
 

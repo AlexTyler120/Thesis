@@ -8,6 +8,8 @@ from scipy.interpolate import RegularGridInterpolator
 import cv2
 import scipy as sp
 from scipy.interpolate import griddata
+from matplotlib.colors import Normalize
+import matplotlib.cm as cm
 def extract_image_patches_no_overlap(image, patch_size, shift):
     """
     Splits an image into patches of the specified size.
@@ -29,11 +31,34 @@ def extract_image_patches_no_overlap(image, patch_size, shift):
         for x in range(0, img_width, patch_width):
             # Ensure patch size is valid (no smaller patches at the edges)
             if (y + patch_height <= img_height) and (x + patch_width <= img_width):
+                
                 patch = image[y:y+patch_height, x:x+patch_width]
+                # # Now add the padding from the surrounding image
+                # y_start_pad = max(0, y - padding_size)
+                # y_end_pad = min(img_height, y + patch_height + padding_size)
+                # x_start_pad = max(0, x - padding_size)
+                # x_end_pad = min(img_width, x + patch_width + padding_size)
+
+                # # Extract the larger region around the patch
+                # patch_with_padding = image[y_start_pad:y_end_pad, x_start_pad:x_end_pad]
+
+                # # Check if we are at the edge and if extra padding is needed
+                # # Use BORDER_REPLICATE to fill the missing areas if we're at the boundary
+                # if patch_with_padding.shape[0] < patch_height + 2 * padding_size or patch_with_padding.shape[1] < patch_width + 2 * padding_size:
+                #     patch_with_padding = cv2.copyMakeBorder(
+                #         patch_with_padding,
+                #         top=padding_size - (y - y_start_pad), bottom=padding_size - (y_end_pad - (y + patch_height)),
+                #         left=padding_size - (x - x_start_pad), right=padding_size - (x_end_pad - (x + patch_width)),
+                #         borderType=cv2.BORDER_REPLICATE
+                #     )
+                
+                # padding
                 # Pad the patch with reflection padding on both x and y axes
                 padded_patch = cv2.copyMakeBorder(
                     patch, padding_size, padding_size, padding_size, padding_size, 
                     borderType=cv2.BORDER_REFLECT
+                    # borderType=cv2.BORDER_REPLICATE
+                    # borderType=cv2.BORDER_CONSTANT
                 )
                 patches.append(padded_patch)
     
@@ -107,7 +132,6 @@ def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, p
                 # Remove the padding by cropping the padding from all sides
                 patch = patches[patch_idx]
                 cropped_patch = patch[padding_size:-padding_size, padding_size:-padding_size]
-                
                 # Place the cropped patch back into the image
                 reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_patch
                 
@@ -155,17 +179,13 @@ def create_full_quiver(image, image_size, patch_size, w12_vals):
     U_quiver = []
     V_quiver = []
     
-    magnitudes = []
     angles = []
-    
+    angle_map = np.zeros((image_height // patch_height, image_width // patch_width))
     for y in range(0, image_height, patch_height):
         for x in range(0, image_width, patch_width):
             if (y + patch_height <= image_height) and (x + patch_width <= image_width):
                 # Get the quiver dx, dy values for this patch
                 U, V = w12_vals[patch_idx]  # Assuming w12_vals contains (U, V) for each patch
-                # if U > V:
-                #     U = -U
-                #     V = -V
                     
                 # Calculate the center of the current patch
                 center_x = x + patch_width // 2
@@ -176,14 +196,10 @@ def create_full_quiver(image, image_size, patch_size, w12_vals):
                 Y_quiver.append(center_y)
                 U_quiver.append(U)
                 V_quiver.append(V)
-                
-                # Calculate the magnitude of the vector
-                magnitude = np.sqrt(U**2 + V**2)
-                magnitudes.append(magnitude)
-                
+                                
                 angle = np.arctan2(V, U)
                 angles.append(angle)
-
+                angle_map[y // patch_height, x // patch_width] = np.degrees(angle)
                 patch_idx += 1
                 
     plt.figure(figsize=(10, 10))
@@ -191,23 +207,29 @@ def create_full_quiver(image, image_size, patch_size, w12_vals):
     plt.quiver(X_quiver, Y_quiver, U_quiver, V_quiver, color='black', angles='xy', scale_units='xy', scale=0.1)
     plt.title(f"Reconstructed Image with Single Quiver Arrow per Patch for rgb")
     
-    # Convert to numpy arrays
-    X_quiver = np.array(X_quiver)
-    Y_quiver = np.array(Y_quiver)
-    magnitudes = np.array(magnitudes)
-    angles = np.degrees(np.array(angles))
-
-    # Create a grid for the entire image
-    X_grid, Y_grid = np.meshgrid(np.arange(0, image_width), np.arange(0, image_height))
-    print(f"min and max angles: {np.min(angles)}, {np.max(angles)}")
-    # Interpolate magnitudes across the grid
-    smooth_magnitudes = griddata((X_quiver, Y_quiver), angles, (X_grid, Y_grid), method='cubic')
-
-    # Plot the original image with the smooth gradient overlay
+    # Plot the angle colormap
     plt.figure(figsize=(10, 10))
-    plt.imshow(image, alpha = 0.4)
-    plt.imshow(smooth_magnitudes, cmap='viridis', alpha=0.6)  # Smooth gradient overlay
-    plt.colorbar(label="Gradient Angles")  # Add a colorbar to show the scale
-    plt.title("Smooth Gradient Plot Over Image")
+    plt.imshow(angle_map, cmap='hsv', extent=(0, image_width, image_height, 0), alpha = 1)
+    plt.colorbar(label="Angle (deg)")
+    plt.title(f"Angle Colormap for Each Patch")
+    
+    normalized_angle_map = (angle_map - np.min(angle_map)) / (np.max(angle_map) - np.min(angle_map))
+
+    angle_map_resized = cv2.resize(normalized_angle_map, (image_width, image_height), interpolation=cv2.INTER_LINEAR)
+
+    # Convert the original image to HSV
+    hsv_image = cv2.cvtColor((image * 255).astype(np.uint8), cv2.COLOR_RGB2HSV)
+
+    # Adjust the hue channel of the HSV image based on the angle map
+    hsv_image[..., 0] = (angle_map_resized * 179).astype(np.uint8)  # Hue values range from 0 to 179
+
+    # Convert the image back to RGB
+    combined_image = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB)
+
+    # Display the combined image
+    plt.figure(figsize=(10, 10))
+    plt.imshow(combined_image)
+    plt.title(f"Original Image Adjusted by the Angle Colormap")
+    plt.axis('off')
     
     
