@@ -61,7 +61,7 @@ def run_estimate_w1(transformed_image):
     for i in range(3):
         img_channel = transformed_image[:, :, i]
 
-        est = WeightingEstimate.optimise_psf(img_channel, shift_estimation)
+        est, _ = WeightingEstimate.optimise_psf(img_channel, shift_estimation)
 
         w1_vals.append(est)
 
@@ -106,7 +106,8 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     losses = loss
 
     # deconvolve
-    deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), balance=0)
+    # deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), balance=0)
+    deconvolved = sk.richardson_lucy(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), num_iter=1)
     # plt.subplot(1, 2, 2)
     # plt.imshow(deconvolved, cmap='gray')
     # plt.show()

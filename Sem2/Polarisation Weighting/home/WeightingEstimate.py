@@ -197,14 +197,14 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
         shifted_img = shifted_img / np.max(shifted_img)
     
     psf_estimate = get_img_psf(estimate, shift_val)
-
-    deconvolved_image = sk.restoration.wiener(shifted_img, psf_estimate, balance=0)
+    # deconvolved_image = sk.restoration.wiener(shifted_img, psf_estimate, balance=0)
+    deconvolved_image = sk.restoration.richardson_lucy(shifted_img, psf_estimate, num_iter=1)
 
     # normalise deconvolved image
     deconvolved_img_norm = deconvolved_image / np.max(deconvolved_image)
 
     # obtain tyhe correlation values of the deconvolved image
-    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=False, normalised=True)
+    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=True, normalised=False)
 
     # apply a savgol filter to the correlation values for peak detection
     corr_filt = ac.obtain_peak_highlighted_curve(corr_vals)
@@ -215,13 +215,13 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
     # loss += check_flatness(shift_vals, corr_filt, shift_val)
     loss = check_gradients(corr_vals, shift_vals)
     loss += check_flatness(shift_vals, corr_filt, shift_val)
-    # loss += minimise_corr_vals(corr_filt, shift_vals)
+    loss += minimise_corr_vals(corr_filt, shift_vals)
     loss += minimise_corr_vals(corr_vals, shift_vals)
 
     loss_vals.append(loss)
     w1_vals.append(estimate)
 
-    min_val = np.where(loss_vals == np.min(loss_vals))[0][0]
+    # min_val = np.where(loss_vals == np.min(loss_vals))[0][0]
 
     # print(f"Loss: {loss.min()} and w1: {w1_vals[min_val]}")
 
@@ -241,9 +241,18 @@ def optimise_psf(shifted_img, shift_val):
                                                 bounds=[BOUNDS], 
                                                 args=(shifted_img, shift_val, loss_vals, w1_vals),
                                                 disp=True,
-                                                tol = 0.01,
+                                                tol = 0.0001,
                                                 polish=False, # use L-BFGS-B to polish the best result
-                                                workers=24)
+                                                workers=1)
+    # result = sp.optimize.minimize(
+    #     loss_function_one_est, 
+    #     x0=[0.5],  # Initial guess for w1
+    #     args=(shifted_img, shift_val, loss_vals, w1_vals),
+    #     method='Powell',
+    #     bounds=[(0, 1)],  # Bounds for w1
+    #     tol=0.0001,
+    #     options={'disp': True}
+    # )
     
     w1_estimate = result.x
     loss_value = result.fun

@@ -40,13 +40,13 @@ def extract_image_patches_no_overlap(image, patch_size, shift):
                 # x_end_pad = min(img_width, x + patch_width + padding_size)
 
                 # # Extract the larger region around the patch
-                # patch_with_padding = image[y_start_pad:y_end_pad, x_start_pad:x_end_pad]
+                # padded_patch = image[y_start_pad:y_end_pad, x_start_pad:x_end_pad]
 
                 # # Check if we are at the edge and if extra padding is needed
                 # # Use BORDER_REPLICATE to fill the missing areas if we're at the boundary
-                # if patch_with_padding.shape[0] < patch_height + 2 * padding_size or patch_with_padding.shape[1] < patch_width + 2 * padding_size:
-                #     patch_with_padding = cv2.copyMakeBorder(
-                #         patch_with_padding,
+                # if padded_patch.shape[0] < patch_height + 2 * padding_size or padded_patch.shape[1] < patch_width + 2 * padding_size:
+                #     padded_patch = cv2.copyMakeBorder(
+                #         padded_patch,
                 #         top=padding_size - (y - y_start_pad), bottom=padding_size - (y_end_pad - (y + patch_height)),
                 #         left=padding_size - (x - x_start_pad), right=padding_size - (x_end_pad - (x + patch_width)),
                 #         borderType=cv2.BORDER_REPLICATE
@@ -61,6 +61,7 @@ def extract_image_patches_no_overlap(image, patch_size, shift):
                     # borderType=cv2.BORDER_CONSTANT
                 )
                 patches.append(padded_patch)
+                # patches.append(patch)
     
     return patches
 
@@ -130,16 +131,16 @@ def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, p
             # Ensure we are not placing smaller patches (ignored at edges)
             if (y + patch_height <= image_height) and (x + patch_width <= image_width):
                 # Remove the padding by cropping the padding from all sides
+                print(patch_idx)
+                
                 patch = patches[patch_idx]
+                
                 cropped_patch = patch[padding_size:-padding_size, padding_size:-padding_size]
                 # Place the cropped patch back into the image
                 reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_patch
                 
                 # Get the quiver dx, dy values for this patch
                 U, V = w12_vals[patch_idx]  # Assuming w12_vals contains (U, V) for each patch
-                # if U > V:
-                #     U = -U
-                #     V = -V
 
                 # Calculate the center of the current patch
                 center_x = x + patch_width // 2
