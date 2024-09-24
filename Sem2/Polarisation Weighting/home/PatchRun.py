@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import Viewer
 import numpy as np
 import patchify
-
+import cupy as cp
 
 def combine_to_rgb(final0, final1, final2):
     """Combine into RGB. Back to front because of BGR
@@ -57,27 +57,17 @@ def process_channel(patches, channel, shift, save_data = False):
     return deconvolved_imgs, w12_vals
 
 
-def process_all_chanels(blurred_img, PATCH_SIZE):
+def process_all_chanels(blurred_img, PATCH_SIZE, ):
     
     RED_CHANNEL = 0
     GREEN_CHANNEL = 1
     BLUE_CHANNEL = 2
     
-    # shift_estimation = ShiftEstimate.compute_pixel_shift(blurred_img)
-    shift_estimation = 5
+    shift_estimation = ShiftEstimate.compute_pixel_shift(blurred_img)
+    # shift_estimation = 5
     print(f"Shift estimate: {shift_estimation}")
 
     patches = PatchGetAndCombine.extract_image_patches_no_overlap(blurred_img, (PATCH_SIZE, PATCH_SIZE), shift_estimation)
-    # patches = split_image_into_patches(blurred_img, (PATCH_SIZE, PATCH_SIZE), shift_estimation)
-    # for i in range(len(patches)):
-    #     # Scale the image from 0-1 to 0-255, then convert to uint8
-    #     patch_rgb = cv2.cvtColor((patches[i] * 255).astype(np.uint8), cv2.COLOR_BGR2RGB)
-    #     plt.figure()
-    #     plt.imshow(patch_rgb)
-    #     plt.axis('off')
-    #     plt.show()
-
-    
     deconvolved_imgs_r, w12_vals_r = process_channel(patches, RED_CHANNEL, shift_estimation, save_data=False)
     _ = PatchGetAndCombine.reconstruct_image_from_patches_no_overlap_with_quiver(deconvolved_imgs_r, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12_vals_r, 0, shift_estimation)
     deconvolved_imgs_g, w12_vals_g = process_channel(patches, GREEN_CHANNEL, shift_estimation, save_data=False)

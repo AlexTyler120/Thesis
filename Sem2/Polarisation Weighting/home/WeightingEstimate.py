@@ -69,46 +69,6 @@ def clarity_both_imgs(img, w1_est, shift_val):
         return 1 - w1_est
     else:
         return w1_est
-    
-def clarity_both_imgs_w1w2(img, w1_est, w2_est, shift_val, balance):
-    """
-    Comput image clarity with both estimations where not added to one and invert.
-    img: the deconvolved image
-    w1_est: the estimate of the weight
-    w2_est: the other estimate of the weight
-    shift_val: the shift value
-    """
-
-    psf_w1 = get_img_psf_w1_w2(w1_est, w2_est, shift_val)
-    psf_w2 = get_img_psf_w1_w2(w2_est, w1_est, shift_val)
-
-    if np.max(img) > 1:
-        print("Normalising as max value has been reached in clarity getter")
-        img = img / np.max(img)
-
-    deconvolved_image_w1 = deconvolve_img(img, psf_w1, balance)
-    deconvolved_image_w2 = deconvolve_img(img, psf_w2, balance)
-
-    # plt.figure()
-    # plt.subplot(1, 2, 1)
-    # plt.imshow(deconvolved_image_w1, cmap='gray')
-    # plt.title(f"Clarity: {clarity_loss(deconvolved_image_w1)}")
-    # plt.subplot(1, 2, 2)
-    # plt.imshow(deconvolved_image_w2, cmap='gray')
-    # plt.title(f"Clarity: {clarity_loss(deconvolved_image_w2)}")
-    # plt.show()
-
-    clarity_w1 = clarity_loss(deconvolved_image_w1)
-    clarity_w2 = clarity_loss(deconvolved_image_w2)
-
-    ## return the weight depending on which clarity is lower
-    print(f"Clarity w1: {clarity_w1} and Clarity w2: {clarity_w2}")
-    print(f"Weight w1: {w1_est} and Weight w2: {w2_est}")
-    if clarity_w2 < clarity_w1:
-        return w2_est, w1_est
-    else:
-        return w1_est, w2_est
-
 
 def check_gradients(corr_vals, shift_vals):
     """
@@ -176,10 +136,10 @@ def minimise_corr_vals(corr_vals, shift_vals):
     zero_idx = np.where(shift_vals == 0)[0][0]
     loss = 0
 
-    for i in range(0, zero_idx - 4):
+    for i in range(0, zero_idx - 3):
         loss += abs(corr_vals[i])
 
-    for i in range(zero_idx + 4, len(corr_vals)):
+    for i in range(zero_idx + 3, len(corr_vals)):
         loss += abs(corr_vals[i])
 
     return loss
@@ -198,7 +158,8 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
     
     psf_estimate = get_img_psf(estimate, shift_val)
     # deconvolved_image = sk.restoration.wiener(shifted_img, psf_estimate, balance=0)
-    deconvolved_image = sk.restoration.richardson_lucy(shifted_img, psf_estimate, num_iter=1)
+    # deconvolved_image = sk.restoration.richardson_lucy(shifted_img, psf_estimate, num_iter=1)
+    deconvolved_image = deconvolve_img(shifted_img, psf_estimate)
 
     # normalise deconvolved image
     deconvolved_img_norm = deconvolved_image / np.max(deconvolved_image)
@@ -261,102 +222,12 @@ def optimise_psf(shifted_img, shift_val):
 
     return est_w1, loss_value
 
-def deconvolve_img(img, psf, balance):
+def deconvolve_img(img, psf, balance = 0):
     """
     Deconvolve the image with the psf
     img: the image to deconvolve
     psf: the psf to use
     balance: the balance parameter
     """
-    return sk.restoration.wiener(img, psf, balance=balance)
-    # return sk.restoration.richardson_lucy(img, psf, num_iter=300)
-
-def get_img_psf_w1_w2(w1, w2, shift):
-    """
-    Get the image psf. That can be applied to the image for deconvolution.
-    w1: the weight of the psf
-    w2: the other weight of the psf
-    shift: the shift value
-    """
-    psf = np.zeros(shift + 1)
-    psf[-1] = w1
-    psf[0] = w2
-
-    # normalise
-    psf = psf / np.sum(psf)
-
-    psf = np.expand_dims(psf, axis=0)
-
-    return psf
-
-def loss_function_two_est(estimate, shifted_img, shift_val, loss_vals, w_vals, balance):
-    """
-    Loss function to optimise the weights of the psf.
-    Just for one w1 and the other is 1 - w1
-    estimate: the estimate of the weight
-    shifted_img: the shifted image
-    shift_val: the shift value
-    """
-    w1_est, w2_est = estimate
-
-    if np.max(shifted_img) > 1:
-        print("Normalising as max value has been reached in loss function two set")
-        shifted_img = shifted_img / np.max(shifted_img)
-
-    psf_estimate = get_img_psf_w1_w2(w1_est, w2_est, shift_val)
-
-    deconvolved_image = deconvolve_img(shifted_img, psf_estimate, balance)
-
-    # normalise deconvolved image
-    deconvolved_img_norm = deconvolved_image / np.max(deconvolved_image)
-    
-    # obtain tyhe correlation values of the deconvolved image
-    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=False, normalised=True)
-
-    # apply a savgol filter to the correlation values for peak detection
-    corr_filt = ac.obtain_peak_highlighted_curve(corr_vals)
-
-    # develop loss
-    loss = 0
-    loss = check_gradients(corr_filt, shift_vals)
-    loss = check_gradients(corr_vals, shift_vals)
-    loss += check_flatness(shift_vals, corr_filt, shift_val)
-    loss += minimise_corr_vals(corr_filt, shift_vals)
-    # loss += 100000 * corr_filt[shift_vals == shift_val]
-    # loss += 100000 * corr_filt[shift_vals == -shift_val]
-
-    loss_vals.append(loss)
-    w_vals.append(estimate)
-
-    min_val = np.where(loss_vals == np.min(loss_vals))[0][0]
-
-    # print(f"Loss: {loss.min()} and w1: {w1_vals[min_val]}")
-
-    return loss
-
-def optimise_psf_both_weight(shifted_img, shift_val):
-    """
-    Want to optimsise both weights instead of just have w2 = 1 - w1
-    shifted_img: the shifted image
-    shift_val: the shift value
-    """
-    BOUNDS = [(0, 1), (0, 1)]
-    loss_vals = []
-    w_vals = []
-    balance = 0
-    result = sp.optimize.differential_evolution(loss_function_two_est, 
-                                                bounds=BOUNDS, 
-                                                args=(shifted_img, shift_val, loss_vals, w_vals, balance),
-                                                # popsize=25,    # Increase population size (default is 15)
-                                                # tol=1e-8,      # Reduce tolerance for stopping
-                                                disp=True,
-                                                polish=False, # use L-BFGS-B to polish the best result
-                                                workers=24)
-    
-    w1_estimate = result.x[0]
-    w2_estimate = result.x[1]
-    loss_value = result.fun
-
-    est_w1, est_w2 = clarity_both_imgs_w1w2(shifted_img, w1_estimate, w2_estimate, shift_val, balance)
-
-    return est_w1, est_w2, loss_value
+    # return sk.restoration.wiener(img, psf, balance=balance)
+    return sk.restoration.richardson_lucy(img, psf, num_iter=2)

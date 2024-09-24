@@ -24,11 +24,6 @@ def main():
     ### Run estimation only getting w1 ###
     # ImageRun.run_estimate_w1(transformed_image)
     ### ###
-
-    ### Run estimation getting w1 and w2 ###
-    # ImageRun.run_estimate_w1_w2(transformed_image)
-    ### ###
-    
     
     rgb, r, g, b, w12 = PatchRun.process_all_chanels(transformed_image, PATCH_SIZE)
     plt.figure(figsize=(10, 10))

@@ -99,7 +99,6 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     
     img_channel_grey = patch[:, :, channel]
     
-    # est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel_grey, shift_estimation)
     est1, loss = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
     est2 = 1 - est1
     w12_vals = [est1, est2]
@@ -107,63 +106,10 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
 
     # deconvolve
     # deconvolved = sk.wiener(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), balance=0)
-    deconvolved = sk.richardson_lucy(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), num_iter=1)
+    # deconvolved = sk.richardson_lucy(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation), num_iter=1)
+    deconvolved = WeightingEstimate.deconvolve_img(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation))
     # plt.subplot(1, 2, 2)
     # plt.imshow(deconvolved, cmap='gray')
     # plt.show()
     # stack the deconvolved images
     return deconvolved, w12_vals
-
-def run_estimate_w1_w2(transformed_image):
-    """
-    Run estimation getting w1 and w2
-    transformed_image: the image to estimate the weighting for
-    """
-
-    shift_estimation = ShiftEstimate.compute_pixel_shift(transformed_image)
-    # shift_estimation = 5
-    w12_vals = []
-    deconvolved_all = []
-    print(f"Shift estimate: {shift_estimation}")
-    losses = []
-    
-    for i in range(3):
-        img_channel_grey = transformed_image[:, :, i]
-        img_channel = img_channel_grey / np.max(img_channel_grey)
-
-        # plt.figure()
-        # plt.imshow(img_channel)
-        # plt.show()
-
-        est1, est2, loss = WeightingEstimate.optimise_psf_both_weight(img_channel, shift_estimation)
-        w12_vals.append([est1, est2])
-        losses.append(loss)
-
-        # deconvolve
-        # deconvolved = sk.wiener(img_channel, WeightingEstimate.get_img_psf_w1_w2(est1, est2, shift_estimation), balance=0)
-        # deconvolved_all.append(deconvolved)
-    # stack the deconvolved images
-    print(f"Channel 0 Loss: {losses[0]}\nChannel 1 Loss: {losses[1]}\nChannel 2 Loss: {losses[2]}")
-    for i in range(len(w12_vals)):
-        print(f"Channel {i}: {w12_vals[i]}")
-        plt.figure()
-        plt.subplot(1, 3, 1)
-
-        # image = transformed_image[:, :, i] / np.max(transformed_image[:, :, i])
-        deconvolved = sk.wiener(transformed_image[:, :, i], WeightingEstimate.get_img_psf_w1_w2(w12_vals[i][0], w12_vals[i][1], shift_estimation), balance=0)
-        deconvolved_all.append(deconvolved)
-        plt.imshow(deconvolved, cmap='gray')
-        plt.title(f"Channel {i} Deconvolved")
-        
-        plt.subplot(1, 3, 2)
-        shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation)
-        plt.plot(shift, corr)
-        plt.title(f"Channel {i} Auto Correlation")
-        
-        plt.subplot(1, 3, 3)
-        plt.plot(shift, ac.obtain_peak_highlighted_curve(corr))
-        plt.title(f"Channel {i} Filtered Auto Correlation")
-
-    plt.show()
-
-    return np.dstack(deconvolved_all)
