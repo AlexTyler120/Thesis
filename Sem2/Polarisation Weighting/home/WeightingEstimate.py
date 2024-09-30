@@ -48,8 +48,10 @@ def clarity_both_imgs(img, w1_est, shift_val):
         print("Normalising as max value has been reached in clarity both imgs")
         img = img / np.max(img)
 
-    deconvolved_image_w1 = sk.restoration.wiener(img, psf_w1, balance=0)
-    deconvolved_image_w2 = sk.restoration.wiener(img, psf_w2, balance=0)
+    # deconvolved_image_w1 = sk.restoration.wiener(img, psf_w1, balance=0)
+    # deconvolved_image_w2 = sk.restoration.wiener(img, psf_w2, balance=0)
+    deconvolved_image_w1 = deconvolve_img(img, psf_w1)
+    deconvolved_image_w2 = deconvolve_img(img, psf_w2)
 
     # plt.figure()
     # plt.subplot(1, 2, 1)
@@ -77,7 +79,7 @@ def check_gradients(corr_vals, shift_vals):
     shift_vals: the shift values
     """
     zero_idx = np.where(shift_vals == 0)[0][0]
-    loss = 0
+    loss = 1
 
     # check the gradients of the correlation values
     # if the gradients are not correct then add to the loss
@@ -103,7 +105,7 @@ def check_flatness(shift_vals, filtered_corr, shift_estimate):
     pos_idx = np.where(shift_vals == shift_estimate)[0][0]
     neg_idx = np.where(shift_vals == -shift_estimate)[0][0]
 
-    loss = 0
+    loss = 1
     # check the peak of shift vals
     loss += 20*(abs(filtered_corr[pos_idx]) + abs(filtered_corr[neg_idx]))
     # overall flatness from std
@@ -134,13 +136,15 @@ def minimise_corr_vals(corr_vals, shift_vals):
     shift_vals: the shift values
     """
     zero_idx = np.where(shift_vals == 0)[0][0]
-    loss = 0
+    loss = 1
 
-    for i in range(0, zero_idx - 3):
-        loss += abs(corr_vals[i])
+    for i in range(0, zero_idx):
+        distance = zero_idx - i
+        loss += distance * abs(corr_vals[i])
 
-    for i in range(zero_idx + 3, len(corr_vals)):
-        loss += abs(corr_vals[i])
+    for i in range(zero_idx + 1, len(corr_vals)):
+        distance = i - zero_idx
+        loss += distance * abs(corr_vals[i])
 
     return loss
 
@@ -165,20 +169,22 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals):
     deconvolved_img_norm = deconvolved_image / np.max(deconvolved_image)
 
     # obtain tyhe correlation values of the deconvolved image
-    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=True, normalised=False)
+    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=True, normalised=True)
 
     # apply a savgol filter to the correlation values for peak detection
     corr_filt = ac.obtain_peak_highlighted_curve(corr_vals)
 
     # develop loss
-    loss = 0
     # loss = check_gradients(corr_filt, shift_vals)
     # loss += check_flatness(shift_vals, corr_filt, shift_val)
-    loss = check_gradients(corr_vals, shift_vals)
+    # loss += minimise_corr_vals(corr_filt, shift_vals)
+    
+    loss = minimise_corr_vals(corr_vals, shift_vals)
     loss += check_flatness(shift_vals, corr_filt, shift_val)
-    loss += minimise_corr_vals(corr_filt, shift_vals)
-    loss += minimise_corr_vals(corr_vals, shift_vals)
-
+    loss += check_gradients(corr_filt, shift_vals)
+    loss += check_gradients(corr_vals, shift_vals)
+    loss += 10e3 * corr_filt[shift_vals == shift_val]
+    loss += 10e3 * corr_filt[shift_vals == -shift_val]
     loss_vals.append(loss)
     w1_vals.append(estimate)
 
@@ -198,13 +204,16 @@ def optimise_psf(shifted_img, shift_val):
     BOUNDS = (0, 1)
     loss_vals = []
     w1_vals = []
+    shift_val = shift_val
     result = sp.optimize.differential_evolution(loss_function_one_est, 
                                                 bounds=[BOUNDS], 
                                                 args=(shifted_img, shift_val, loss_vals, w1_vals),
                                                 disp=True,
-                                                tol = 0.0001,
-                                                polish=False, # use L-BFGS-B to polish the best result
-                                                workers=1)
+                                                tol = 1e-5,
+                                                polish=True, # use L-BFGS-B to polish the best result
+                                                maxiter=75,
+                                                popsize = 30,
+                                                workers=28)
     # result = sp.optimize.minimize(
     #     loss_function_one_est, 
     #     x0=[0.5],  # Initial guess for w1
@@ -229,5 +238,5 @@ def deconvolve_img(img, psf, balance = 0):
     psf: the psf to use
     balance: the balance parameter
     """
-    # return sk.restoration.wiener(img, psf, balance=balance)
-    return sk.restoration.richardson_lucy(img, psf, num_iter=2)
+    return sk.restoration.wiener(img, psf, balance=balance)
+    # return sk.restoration.richardson_lucy(img, psf, num_iter=30)

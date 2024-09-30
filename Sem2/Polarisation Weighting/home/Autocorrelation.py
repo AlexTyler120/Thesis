@@ -42,7 +42,24 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
     # loop through the shift values
     for x_shift in range(-max_shift, max_shift + 1):
         # shift the iamge
-        shifted_shifted_img = sp.ndimage.shift(img, shift=(0,x_shift), mode='constant', cval=0)
+        # shifted_shifted_img = sp.ndimage.shift(img, shift=(0,x_shift), mode='constant', cval=0)
+        # if x_shift > 0:
+        #     shifted_shifted_img = np.zeros_like(img)
+        #     shifted_shifted_img[:, x_shift:] = img[:, :-x_shift]
+        # elif x_shift < 0:
+        #     shifted_shifted_img = np.zeros_like(img)
+        #     shifted_shifted_img[:, :x_shift] = img[:, -x_shift:]
+        # else:
+        #     shifted_shifted_img = img.copy()  # No shift for x_shift = 0
+        shifted_shifted_img = np.roll(img, x_shift, axis=1)
+        # plt.figure()
+        # plt.subplot(1, 2, 1)
+        # plt.imshow(img, cmap='gray')
+        # plt.title("Original Image")
+        # plt.subplot(1, 2, 2)
+        # plt.imshow(shifted_shifted_img, cmap='gray')
+        # plt.title("Shifted Image")
+        # plt.show()
         # flatten for np.correlate
         if normalised:
             img_cent = img - np.mean(img)

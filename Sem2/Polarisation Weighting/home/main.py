@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import pickle
 import PatchGetAndCombine
+from gt import gt
 def main():
     RESIZE_VAR = 1
     GREY = False
@@ -14,18 +15,20 @@ def main():
     PATCH_SIZE = 12
 
     ### Shift estimates with polarised images ###
-    transformed_image = ImageRun.polarised_generation("fakefruit", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
+    # transformed_image = ImageRun.polarised_generation("fakefruit", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
     ### ###
 
     ### Shift estimates with simulated images ###
-    # transformed_image = ImageRun.simulated_generation("flowerfull.jpg", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
+    transformed_image = ImageRun.simulated_generation("flowerfull.jpg", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
     ### ###
 
     ### Run estimation only getting w1 ###
-    # ImageRun.run_estimate_w1(transformed_image)
+    ImageRun.run_estimate_w1(transformed_image)
     ### ###
+    gt()
     
     rgb, r, g, b, w12 = PatchRun.process_all_chanels(transformed_image, PATCH_SIZE)
+    
     plt.figure(figsize=(10, 10))
     plt.subplot(2,2,1)
     plt.imshow(r, cmap='gray')
@@ -47,6 +50,7 @@ def main():
     plt.title("RGB Image")
     plt.axis('off')
     PatchGetAndCombine.create_full_quiver(rgb, transformed_image.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12)   
+    # _ = PatchGetAndCombine.create_full_quiver_with_overlap(rgb, transformed_image.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12)
     plt.show()
     
     
