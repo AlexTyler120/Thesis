@@ -15,7 +15,8 @@ def display_image(img, title, grey=False, showim=False):
         plt.imshow(img, cmap='gray')
     else:
         # bgr to rgb
-        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.imshow(img)
     plt.title(title)
     plt.axis('off')
     if showim:

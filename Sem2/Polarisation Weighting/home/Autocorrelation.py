@@ -9,6 +9,7 @@ def apply_savgol_filter(corr_vals, window_size = 7, poly_order=3):
     window_size: the window size of the filter
     poly_order: the order of the polynomial to fit
     """
+    
     return sp.signal.savgol_filter(corr_vals, window_size, poly_order)
 
 def obtain_peak_highlighted_curve(corr_vals):
@@ -38,35 +39,30 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
     shift_values = []
     corr_values = []
 
-    
     # loop through the shift values
     for x_shift in range(-max_shift, max_shift + 1):
-        # shift the iamge
-        # shifted_shifted_img = sp.ndimage.shift(img, shift=(0,x_shift), mode='constant', cval=0)
-        # if x_shift > 0:
-        #     shifted_shifted_img = np.zeros_like(img)
-        #     shifted_shifted_img[:, x_shift:] = img[:, :-x_shift]
-        # elif x_shift < 0:
-        #     shifted_shifted_img = np.zeros_like(img)
-        #     shifted_shifted_img[:, :x_shift] = img[:, -x_shift:]
-        # else:
-        #     shifted_shifted_img = img.copy()  # No shift for x_shift = 0
-        shifted_shifted_img = np.roll(img, x_shift, axis=1)
-        # plt.figure()
-        # plt.subplot(1, 2, 1)
-        # plt.imshow(img, cmap='gray')
-        # plt.title("Original Image")
-        # plt.subplot(1, 2, 2)
-        # plt.imshow(shifted_shifted_img, cmap='gray')
-        # plt.title("Shifted Image")
-        # plt.show()
-        # flatten for np.correlate
+        shifted_shifted_img = np.roll(img, x_shift, axis=1)     
+        # shifted_shifted_img = sp.ndimage.shift(img, (0, x_shift), order=0, mode="reflect") 
         if normalised:
             img_cent = img - np.mean(img)
             shifted_shifted_cent = shifted_shifted_img - np.mean(shifted_shifted_img)
             num = np.sum(img_cent*shifted_shifted_cent)
             den = np.sqrt(np.sum(img_cent**2)*np.sum(shifted_shifted_cent**2))
             cross_corr = num/den
+            # if np.isnan(cross_corr):
+            #     cross_corr = 0
+            # print(cross_corr)
+            # plt.figure()
+            # plt.subplot(1, 2, 1)
+            # plt.imshow(img, cmap='gray')
+            # plt.title("Original Image")
+            # plt.colorbar()
+            # plt.subplot(1, 2, 2)
+            # plt.imshow(shifted_shifted_img, cmap='gray')
+            # plt.title("Shifted Image")
+            # plt.colorbar()
+            # plt.show()
+            
         else:
             img_flat = img.flatten()
             shifted_shifted_flat = shifted_shifted_img.flatten()
@@ -75,10 +71,13 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True)
             
         # add max value and shift value to list
         corr_values.append(np.max(cross_corr))
-        shift_values.append(x_shift)
-
-    corr_values = np.array(corr_values)
-    shift_values = np.array(shift_values)
-    
+        shift_values.append((x_shift))
+    # plt.figure()
+    # plt.plot(shift_values, corr_values)
+    # corr_values = np.array(corr_values)
+    # shift_values = np.array(shift_values)
+    # plt.show()
+    # print("Shift values: ", shift_values)
+    # print(f"np.where shift values == 0: {np.where(np.isclose(shift_values, 0))}")
 
     return shift_values, corr_values

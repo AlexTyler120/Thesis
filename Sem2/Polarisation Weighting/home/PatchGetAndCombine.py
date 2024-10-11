@@ -19,6 +19,8 @@ from skimage.feature import peak_local_max
 from skimage.morphology import disk
 from skimage.filters import rank
 from skimage.restoration import denoise_nl_means, estimate_sigma
+from scipy.stats import zscore
+import pickle
 def extract_image_patch_overlap(image, patch_size, overlap=0.5):
     """_summary_
 
@@ -205,32 +207,32 @@ def extract_image_patches_no_overlap(image, patch_size, shift):
             if (y + patch_height <= img_height) and (x + patch_width <= img_width):
                 
                 patch = image[y:y+patch_height, x:x+patch_width]
-                # Now add the padding from the surrounding image
-                y_start_pad = max(0, y - padding_size)
-                y_end_pad = min(img_height, y + patch_height + padding_size)
-                x_start_pad = max(0, x - padding_size)
-                x_end_pad = min(img_width, x + patch_width + padding_size)
+                # # Now add the padding from the surrounding image
+                # y_start_pad = max(0, y - padding_size)
+                # y_end_pad = min(img_height, y + patch_height + padding_size)
+                # x_start_pad = max(0, x - padding_size)
+                # x_end_pad = min(img_width, x + patch_width + padding_size)
 
-                # Extract the larger region around the patch
-                padded_patch = image[y_start_pad:y_end_pad, x_start_pad:x_end_pad]
+                # # Extract the larger region around the patch
+                # padded_patch = image[y_start_pad:y_end_pad, x_start_pad:x_end_pad]
 
-                # Check if we are at the edge and if extra padding is needed
-                # Use BORDER_REPLICATE to fill the missing areas if we're at the boundary
-                if padded_patch.shape[0] < patch_height + 2 * padding_size or padded_patch.shape[1] < patch_width + 2 * padding_size:
-                    padded_patch = cv2.copyMakeBorder(
-                        padded_patch,
-                        top=padding_size - (y - y_start_pad), bottom=padding_size - (y_end_pad - (y + patch_height)),
-                        left=padding_size - (x - x_start_pad), right=padding_size - (x_end_pad - (x + patch_width)),
-                        # borderType=cv2.BORDER_REPLICATE
-                        borderType=cv2.BORDER_REFLECT
-                    )
+                # # Check if we are at the edge and if extra padding is needed
+                # # Use BORDER_REPLICATE to fill the missing areas if we're at the boundary
+                # if padded_patch.shape[0] < patch_height + 2 * padding_size or padded_patch.shape[1] < patch_width + 2 * padding_size:
+                #     padded_patch = cv2.copyMakeBorder(
+                #         padded_patch,
+                #         top=padding_size - (y - y_start_pad), bottom=padding_size - (y_end_pad - (y + patch_height)),
+                #         left=padding_size - (x - x_start_pad), right=padding_size - (x_end_pad - (x + patch_width)),
+                #         # borderType=cv2.BORDER_REPLICATE
+                #         borderType=cv2.BORDER_REFLECT
+                #     )
                     
-                # padded_patch = cv2.copyMakeBorder(
-                #     patch, padding_size, padding_size, padding_size, padding_size, 
-                #     # borderType=cv2.BORDER_REFLECT
-                #     # borderType=cv2.BORDER_REPLICATE
-                #     # borderType=cv2.BORDER_CONSTANT
-                # )
+                padded_patch = cv2.copyMakeBorder(
+                    patch, padding_size, padding_size, padding_size, padding_size, 
+                    borderType=cv2.BORDER_REFLECT
+                    # borderType=cv2.BORDER_REPLICATE
+                    # borderType=cv2.BORDER_CONSTANT
+                )
                 patches.append(padded_patch)
                 # patches.append(patch)
     
@@ -270,7 +272,7 @@ def reconstruct_image_from_patches_no_overlap(patches, image_size, patch_size, s
     
     return reconstructed_image
 
-def colour_stuff_filtering(angle_map, reconstructed_image, channel, image_width, image_height, valid_mask):
+def colour_stuff_filtering(angle_map, reconstructed_image, channel, image_width, image_height):
     # Normalisation of the angle map
     normalised_angle_map = angle_map / np.max(angle_map)
 
@@ -304,8 +306,7 @@ def colour_stuff_filtering(angle_map, reconstructed_image, channel, image_width,
         resized_map = cv2.resize(normalised_map, (image_width, image_height), interpolation=cv2.INTER_LINEAR)
         # colour_overlays[key] = (plt.cm.jet(resized_map)[:, :, :3] * 255).astype(np.uint8)
         colour_overlay = (plt.cm.jet(resized_map)[:, :, :3] * 255).astype(np.uint8)
-        valid_mask_resized = cv2.resize(valid_mask.astype(np.uint8), (image_width, image_height), interpolation=cv2.INTER_NEAREST).astype(bool)
-        colour_overlay[~valid_mask_resized] = cv2.cvtColor(reconstructed_image, cv2.COLOR_GRAY2RGB)[~valid_mask_resized]
+        colour_overlay[~0] = cv2.cvtColor(reconstructed_image, cv2.COLOR_GRAY2RGB)[~0]
 
         # colour_overlay[~valid_mask] = cv2.cvtColor(reconstructed_image[~valid_mask], cv2.COLOR_GRAY2RGB)[~valid_mask]
         colour_overlays[key] = colour_overlay
@@ -423,29 +424,69 @@ def reconstruct_image_from_patches_no_overlap_with_quiver(patches, image_size, p
                 
                 patch_idx += 1
         
-    colour_stuff_filtering(angle_map, reconstructed_image, channel, image_width, image_height, valid_mask)
+    colour_stuff_filtering(angle_map, reconstructed_image, channel, image_width, image_height)
 
     return reconstructed_image
+
+def show_patches_on_canvas(current_patch, above_patch, below_patch, left_patch, right_patch):
+    patch_height, patch_width = current_patch.shape
+    
+    # Create a blank canvas large enough to hold all patches in a 3x3 grid
+    canvas_height = patch_height * 3
+    canvas_width = patch_width * 3
+    canvas = np.ones((canvas_height, canvas_width)) * 0.5  # Initialize to gray for missing patches
+    
+    # Compute the center position for the current patch
+    center_y, center_x = patch_height, patch_width
+    
+    # Place the current patch in the center
+    canvas[center_y:center_y + patch_height, center_x:center_x + patch_width] = current_patch
+    
+    # Place the above patch (if available)
+    if above_patch is not None:
+        canvas[0:patch_height, center_x:center_x + patch_width] = above_patch
+    
+    # Place the below patch (if available)
+    if below_patch is not None:
+        canvas[2 * patch_height:3 * patch_height, center_x:center_x + patch_width] = below_patch
+    
+    # Place the left patch (if available)
+    if left_patch is not None:
+        canvas[center_y:center_y + patch_height, 0:patch_width] = left_patch
+    
+    # Place the right patch (if available)
+    if right_patch is not None:
+        canvas[center_y:center_y + patch_height, 2 * patch_width:3 * patch_width] = right_patch
+    
+    # Plot the canvas
+    plt.figure(figsize=(8, 8))
+    plt.imshow(canvas, cmap='gray')
+    plt.title("Current Patch and Neighbors on Canvas")
+    plt.show()
+    
 
 def reconstruct_image_patch_intensity(patches, deconvolved_patches, image_size, patch_size, shift, channel, w12vals):
     image_height, image_width = image_size
     patch_height, patch_width = patch_size
     padding_size = shift
-    valid_mask = np.zeros((image_height, image_width), dtype=bool)  # Mask to store valid patches
-
+    patch_height = patch_height
+    patch_width = patch_width 
     # Create an empty array for the reconstructed image
     reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
-    angle_map = np.zeros((image_height // patch_height, image_width // patch_width))
-    angle_image = np.zeros((image_height, image_width), dtype=np.float32)
-    angle_patches = np.zeros((image_height // patch_height, image_width // patch_width))
     patch_idx = 0
-    dop_proxy = np.zeros_like(reconstructed_image)
     I_0_total = np.zeros_like(reconstructed_image)
     I_90_total = np.zeros_like(reconstructed_image)
-    aop_map = np.zeros_like(reconstructed_image)
+    aop_map = np.zeros((image_height, image_width))
     dop_map = np.zeros_like(reconstructed_image)
-    # Loop over the image to place patches in the correct position
+    angle_map = np.zeros_like(reconstructed_image)
+    num_rows = image_height // patch_height  # Number of patches in vertical direction
+    num_cols = image_width // patch_width    # Number of patches in horizontal direction
+    
+    magnitude_spectrum = np.zeros((image_height, image_width))
+    print(f"Num Rows: {num_rows} and Num Cols: {num_cols}")
+    row = 0
     for y in range(0, image_height, patch_height):
+        col = 0
         for x in range(0, image_width, patch_width):
             # Ensure we are not placing smaller patches (ignored at edges)
             if (y + patch_height <= image_height) and (x + patch_width <= image_width):
@@ -453,93 +494,164 @@ def reconstruct_image_patch_intensity(patches, deconvolved_patches, image_size, 
                 patch = patches[patch_idx]
                 patch = patch[:,:, channel]
                 deconvolved_patch = deconvolved_patches[patch_idx]
-                w1, w2 = w12vals[patch_idx]
-                if not (0.05 <= w1 <= 0.48 or 0.52 <= w1 <= 0.95):
-                    valid_mask[y:y+patch_height, x:x+patch_width] = True
-                else:
-                    valid_mask[y:y+patch_height, x:x+patch_width] = True
-                    # patch_idx += 1
-                    # continue  # Skip this patch if the condition is not met
+                w1, w2 = w12vals[patch_idx]  
                 
-                cropped_patch = patch[padding_size:-padding_size, padding_size:-padding_size]
-                cropped_deconvolved_patch = deconvolved_patch[padding_size:-padding_size, padding_size:-padding_size]
+                cropped_deconvolved_patch = deconvolved_patch[5:-5, 5:-5]
+                
                 # Place the cropped patch back into the image
-                reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_deconvolved_patch
-                if np.std(cropped_patch) < 0.0125 or not (0.05 <= w1 <= 0.48 or 0.52 <= w1 <= 0.95):
-                    intensity_diff = 0
-                else:
-                    intensity_diff = np.abs(np.median(cropped_deconvolved_patch + cropped_patch))
-                # intensity_diff = np.degrees(np.arctan2(w1, 1)) * np.abs(np.median(cropped_deconvolved_patch - cropped_patch))
                 
-                # intensity_diff = np.arctan2(pos_diff + 1e-8, neg_diff + 1e-8)
-                intensity_diff = np.degrees(np.arctan2(w2, w1))
-                intensity_diff = w1
-                min_angle, max_angle = 0.0, 45.0
-                # if w1 > 0.5:
-                #     intensity_diff /= w1
-                # else:
-                #     intensity_diff /= w2
-                polarisation_angle = intensity_diff
 
                 # angles for each pixel
                 angles = np.zeros_like(cropped_deconvolved_patch)
+                mag_pix = np.zeros_like(cropped_deconvolved_patch)
                 I_0_patch = np.zeros_like(cropped_deconvolved_patch)
                 I_90_patch = np.zeros_like(cropped_deconvolved_patch)
-                aop_patch = np.zeros_like(cropped_deconvolved_patch)
-                dop_patch = np.zeros_like(cropped_deconvolved_patch)
+                # if (0.2 <= w1 <= 0.3 or 0.7 <= w1 <= 0.8):
+                #     w1 = 0.5
+                #     w2 = 0.5
                 for i in range(patch_height):
                     for j in range(patch_width):
-                        angles[i,j] = (w1 - w2) / (w2 + w1)
-                        angles[i,j] = np.clip(angles[i,j], -0.99, 0.99)
-                        I_0_patch[i,j] = cropped_deconvolved_patch[i,j] / (1 + angles[i,j])
-                        I_90_patch[i,j] = cropped_deconvolved_patch[i,j] / (1 - angles[i,j])
-                        I_0_patch[i,j] = (I_0_patch[i,j] - np.min(I_0_patch)) / (np.max(I_0_patch) - np.min(I_0_patch))
-                        I_90_patch[i,j] = (I_90_patch[i,j] - np.min(I_90_patch)) / (np.max(I_90_patch) - np.min(I_90_patch))
-                        if np.std(cropped_deconvolved_patch) < 0.02:
-                            aop_patch[i,j] = 0
-                        else:
-                            aop_patch[i,j] = np.degrees(0.5 * np.arctan2(np.abs(I_90_patch[i,j] - I_0_patch[i,j]), I_0_patch[i,j] + I_90_patch[i,j]))
-                        dop_patch[i,j] = np.abs(I_0_patch[i,j] - I_90_patch[i,j]) / (I_0_patch[i,j] + I_90_patch[i,j] + 1e-8)
-                
-                angle_image[y: y + patch_height, 
-                            x : x + patch_width] = angles
-                
-                # Place the cropped patch back into the image
+                        angles[i,j] = np.degrees(np.arctan2(w2, w1))
+                        mag_pix[i, j] = np.sqrt(w1**2 + w2**2)
+                        I_0_patch[i,j] = (cropped_deconvolved_patch[i,j]) * w2
+                        I_90_patch[i, j] = w1 * cropped_deconvolved_patch[i, j]
+
+                        
                 reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_deconvolved_patch
                 I_0_total[y:y+patch_height, x:x+patch_width] = I_0_patch
                 I_90_total[y:y+patch_height, x:x+patch_width] = I_90_patch
-                aop_map[y:y+patch_height, x:x+patch_width] = aop_patch
-                # Store the polarisation angle in the angle map
-                angle_map[y // patch_height, x // patch_width] = polarisation_angle
-                dop_proxy[y:y+patch_height, x:x+patch_width] = (w1 - w2) / (w2 + w1) # -1 w90 much stronger dominance of 90 deg polarisation 
-                dop_map[y:y+patch_height, x:x+patch_width] = dop_patch
-                # 1 w0 much stronger dominance of 0 deg polarisation
+                angle_map[y:y+patch_height, x:x+patch_width] = angles
+                magnitude_spectrum[y:y+patch_height, x:x+patch_width] = mag_pix
                 patch_idx += 1
-    print(f"Min angle: {np.min(angle_map)}, Max angle: {np.max(angle_map)}")
-    # normalise angle map 0 -45
-    colour_stuff_filtering(aop_map, reconstructed_image, 0, image_width, image_height, valid_mask)
+            col += 1
+        row += 1
+    
+    patches_row_width = patch_width * num_cols
+    patches_col_height = patch_height * num_rows
+    print(f"Row Width: {patches_row_width} and Col Height: {patches_col_height}")
+    # crop images to this
+    I_0_total = I_0_total[:patches_col_height, :patches_row_width]
+    I_90_total = I_90_total[:patches_col_height, :patches_row_width]
+    angle_map = angle_map[:patches_col_height, :patches_row_width]
+    magnitude_spectrum = magnitude_spectrum[:patches_col_height, :patches_row_width]
+    reconstructed_image = reconstructed_image[:patches_col_height, :patches_row_width]
+    
+    
+    # normalise I total
+    # pickle save
+    with open('I_0_total.pkl', 'wb') as f:
+        pickle.dump(I_0_total, f)
+    with open('I_90_total.pkl', 'wb') as f:
+        pickle.dump(I_90_total, f)
+    
     plt.figure()
-    plt.imshow(I_0_total, cmap='jet')
+    plt.imshow(angle_map)
+    plt.title("Angle Map")
+    plt.colorbar()
+    plt.figure()
+    plt.imshow(magnitude_spectrum)
+    plt.title("Magnitude Spectrum")
+    plt.colorbar()
+    
+    plt.figure()
+    plt.imshow(I_0_total, cmap='Blues')
     plt.title("I_0")
-    plt.colorbar(label='DoP Proxy')
+    plt.colorbar()
     plt.figure()
-    plt.imshow(I_90_total, cmap='jet')
+    plt.imshow(I_90_total, cmap='Reds')
     plt.title("I_90")
-    plt.colorbar(label='DoP Proxy')
+    plt.colorbar()
     plt.figure()
-    plt.imshow(aop_map, cmap='jet', alpha=0.6)
-    plt.imshow(reconstructed_image, cmap='gray', alpha=0.4)
-    plt.colorbar(label='AoP')
-    plt.title("AoP")
+    # plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
+    plt.imshow((-I_0_total + I_90_total), cmap='jet')
+    
+    plt.colorbar()
+    plt.title("I_90 - I_0")
     plt.figure()
-    plt.imshow(dop_map, cmap='jet')
-    plt.colorbar(label='DoP')
+    plt.imshow(reconstructed_image, cmap='gray')
+    plt.title("Reconstructed Image")
     
+    plt.show()
+
     
-    # plt.colorbar(label='Angle (degrees)')
     return reconstructed_image
 
 
+# def reconstruct_image_patch_intensity(patches, deconvolved_patches, image_size, patch_size, shift, channel, w12vals):
+#     image_height, image_width = image_size
+#     patch_height, patch_width = patch_size
+#     padding_size = shift
+    
+#     # Create an empty array for the reconstructed image
+#     reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
+#     I_0_total = np.zeros_like(reconstructed_image)
+#     I_90_total = np.zeros_like(reconstructed_image)
+#     angle_map = np.zeros_like(reconstructed_image)
+#     dop_map = np.zeros_like(reconstructed_image)
+    
+#     patch_idx = 0
+#     num_rows = image_height // patch_height  # Number of patches in vertical direction
+#     num_cols = image_width // patch_width    # Number of patches in horizontal direction
+#     print(f"Num Rows: {num_rows} and Num Cols: {num_cols}")
+    
+#     for y in range(0, image_height, patch_height):
+#         for x in range(0, image_width, patch_width):
+#             # Ensure we are not placing smaller patches (ignored at edges)
+#             if (y + patch_height <= image_height) and (x + patch_width <= image_width):
+#                 deconvolved_patch = deconvolved_patches[patch_idx]
+#                 w1, w2 = w12vals[patch_idx]  # Extract the PSF weights for this patch
+                
+#                 # Crop the padding out from all sides
+#                 cropped_deconvolved_patch = deconvolved_patch[padding_size:-padding_size, padding_size:-padding_size]
+                
+#                 # Calculate I_0 and I_90 based on w1 and w2
+#                 I_0_patch = (w2 / (w1 + w2)) * cropped_deconvolved_patch
+#                 I_90_patch = (w1 / (w1 + w2)) * cropped_deconvolved_patch
+                
+#                 # Place the I_0 and I_90 patches back into their corresponding regions in the final image
+#                 reconstructed_image[y:y+patch_height, x:x+patch_width] = cropped_deconvolved_patch
+#                 I_0_total[y:y+patch_height, x:x+patch_width] = I_0_patch
+#                 I_90_total[y:y+patch_height, x:x+patch_width] = I_90_patch
+                
+#                 # Calculate the angle for each pixel based on the difference between I_0 and I_90
+#                 # Calculate the Degree of Polarisation (DoP)
+#                 dop_map[y:y+patch_height, x:x+patch_width] = np.abs(I_0_patch - I_90_patch) / (I_0_patch + I_90_patch)
+#                 # if dop_map < 0.5 then angle is 0
+#                 angles = np.arctan2(I_90_patch - I_0_patch, I_0_patch + I_90_patch)
+#                 if w1 > 0.95 or w1 < 0.05:
+#                     angles = 0
+#                 angle_map[y:y+patch_height, x:x+patch_width] = angles
+                
+                
+                
+#                 patch_idx += 1
+#     # Save I_0_total as a pickle file
+#     with open('I_0_total.pkl', 'wb') as f:
+#         pickle.dump(I_0_total, f)
+#     with open('I_90_total.pkl', 'wb') as f:
+#         pickle.dump(I_90_total, f)
+#     # show the images
+#     plt.figure()
+#     plt.imshow(I_0_total, cmap='jet')
+#     plt.title("I_0")
+#     plt.colorbar()
+#     plt.figure()
+#     plt.imshow(I_90_total, cmap='jet')
+#     plt.title("I_90")
+#     plt.colorbar()
+#     plt.figure()
+#     plt.imshow(reconstructed_image, cmap='gray')
+#     plt.title("Reconstructed Image")
+#     plt.figure()
+#     plt.imshow(reconstructed_image, cmap='gray')
+#     plt.imshow(angle_map, cmap='seismic', alpha =0.7)
+#     plt.title("Angle Map")
+#     plt.colorbar()
+#     plt.figure()
+#     plt.imshow(dop_map, cmap='jet')
+#     plt.title("Degree of Polarisation (DoP)")
+#     plt.colorbar()
+    
 
 def create_full_quiver(image, image_size, patch_size, w12_vals):
     image_height, image_width = image_size

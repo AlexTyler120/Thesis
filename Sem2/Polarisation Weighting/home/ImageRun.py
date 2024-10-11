@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from skimage import restoration as sk
 import cv2
+import pickle
 
 def polarised_generation(file_name, degree, resize_var, grey, shift):
     """
@@ -17,10 +18,38 @@ def polarised_generation(file_name, degree, resize_var, grey, shift):
     grey: if True then convert the image to greyscale
     shift: the amount to shift the image by
     """
+    # path1 = "python/test_im/" + file_name + "/rect_" + file_name + "_"+str(degree)+".png"
+    # path2 = "python/test_im/" + file_name + "/rect_" + file_name + "_"+str(degree+45)+".png"
+    # path3 = "python/test_im/" + file_name + "/rect_" + file_name + "_"+str(degree+90)+".png"
+    # path4 = "python/test_im/" + file_name + "/rect_" + file_name + "_"+str(degree+135)+".png"
+    
+    # i0 = cv2.imread(path1)
+    # i45 = cv2.imread(path2)
+    # i90 = cv2.imread(path3)
+    # i135 = cv2.imread(path4)
+    # # convert to rgb
+    # I0 = cv2.cvtColor(i0, cv2.COLOR_BGR2RGB)
+    # I45 = cv2.cvtColor(i45, cv2.COLOR_BGR2RGB)
+    # I90 = cv2.cvtColor(i90, cv2.COLOR_BGR2RGB)
+    # I135 = cv2.cvtColor(i135, cv2.COLOR_BGR2RGB)
+    
+    # I90[:, shift:] = I90[:, :-shift]
+    # I135[shift:, :] = I135[:-shift, :]
+    # I45[:-shift, :] = I45[shift:, :]
+    # I0[:, :-shift] = I0[:, shift:]
+    
+    # I0I90 = cv2.addWeighted(I0, 0.5, I90, 0.5, 0)
+    # I45I135 = cv2.addWeighted(I45, 0.5, I135, 0.5, 0)
+    # total = cv2.addWeighted(I0I90, 0.5, I45I135, 0.5, 0)
+    # plt.figure()
+    # plt.imshow(total)
+    # plt.title("Four Polarised Images Combined")
+    # plt.show()
 
-    path1 = "python/test_im/" + file_name + "/sq_" + file_name + "_"+str(degree)+".png"
-    path2 = "python/test_im/" + file_name + "/sq_" + file_name + "_"+str(degree+90)+".png"
-
+    path1 = "python/test_im/" + file_name + "/rect_" + file_name + "_"+str(degree)+".png"
+    path2 = "python/test_im/" + file_name + "/rect_" + file_name + "_"+str(degree+90)+".png"
+    print(path1)
+    print(path2)
     img1, _, _ = Images.read_image(path1, resize_var, grey)
     img2, _, _ = Images.read_image(path2, resize_var, grey)
 
@@ -62,8 +91,11 @@ def run_estimate_w1(transformed_image):
     for i in range(3):
         img_channel = transformed_image[:, :, i]
 
-        est, _ = WeightingEstimate.optimise_psf(img_channel, shift_estimation)
-
+        est, _, all_losses = WeightingEstimate.optimise_psf(img_channel, shift_estimation)
+        
+        with open(f'loss_values_{i}_powell_03.pkl', 'wb') as f:
+            pickle.dump(all_losses, f)
+            
         w1_vals.append(est)
 
     for i in range(len(w1_vals)):
@@ -77,7 +109,7 @@ def run_estimate_w1(transformed_image):
         plt.title(f"Channel {i} Deconvolved")
         
         plt.subplot(1, 3, 2)
-        shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation, shift_est_func=True, normalised=True)
+        shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation)
         plt.plot(shift, corr)
         plt.title(f"Channel {i} Auto Correlation")
         
@@ -87,7 +119,7 @@ def run_estimate_w1(transformed_image):
 
     plt.show()
     
-def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
+def run_estimate_w1_w2_patch(patch, channel, shift_estimation, og_patch = None):
     """
     Run estimation getting w1 and w2
     transformed_image: the image to estimate the weighting for
@@ -98,49 +130,79 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation):
     print(f"Shift estimate: {shift_estimation}")
     
     img_channel_grey = patch[:, :, channel]
-    resize_var = 5
+    resize_var = 1
 
     # make image larger
     img_channel_grey = cv2.resize(img_channel_grey, (img_channel_grey.shape[1] * resize_var, img_channel_grey.shape[0] * resize_var))
     shift_estimation = shift_estimation * resize_var
-
+    
     # shift, corr = ac.compute_auto_corr(img_channel_grey, shift_estimation, shift_est_func=True, normalised=True)
+    # valid_index = np.where((shift >= -5) & (shift <= 5))[0]
     # corr_filt = ac.obtain_peak_highlighted_curve(corr)
     
+    # shift = shift[valid_index]
+    # corr = corr[valid_index]
+    # corr_filt = corr_filt[valid_index]
     # fig, axs = plt.subplots(2, 3, figsize=(15, 10))
     
-    # axs[0, 0].imshow(img_channel_grey, cmap='gray')
-    # axs[0, 0].set_title(f"Channel {channel} Patch pre")
+    # im = axs[1, 0].imshow(img_channel_grey[5:-5, 5:-5], cmap='gray')
+    # axs[1, 0].set_title(f"Channel {channel} Patch Blurred")
+    # # plt.colorbar(im, ax=axs[0, 0])
     
-    # axs[0, 1].plot(shift, corr_filt)
-    # axs[0, 1].set_title(f"Channel {channel} Patch Auto Correlation")
+    # axs[1, 1].plot(shift, corr)
+    # axs[1, 1].set_title(f"Channel {channel} Patch Cross-Correlation")
     
-    # axs[0, 2].plot(shift, corr)
-    # axs[0, 2].set_title(f"Channel {channel} Patch Auto Correlation Unfiltered")
+    # axs[1, 2].plot(shift, corr_filt)
+    # axs[1, 2].set_title(f"Channel {channel} Patch Filtered Correlation")
     
-    est1, loss = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
+    est1, loss, _ = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
     est2 = 1 - est1
     w12_vals = [est1, est2]
-
+    print(f"psf {WeightingEstimate.get_img_psf(est1, shift_estimation)}")
     deconvolved = WeightingEstimate.deconvolve_img(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation))
     
     deconvolved = cv2.resize(deconvolved, (patch.shape[1], patch.shape[0]))
     shift_estimation = shift_estimation // resize_var
-    # axs[1, 0].imshow(deconvolved, cmap='gray')
-    # axs[1, 0].set_title(f"Channel {channel} Patch Deconvolved")
     
-    # shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation, shift_est_func=True, normalised=True)
+    # im = axs[0, 0].imshow(og_patch[5:-5, 5:-5], cmap='gray')
+    # axs[0, 0].set_title(f"Channel {channel} Patch Original")
+    # # plt.colorbar(im, ax=axs[1, 0])
     
-    # axs[1, 1].plot(shift, corr)
-    # axs[1, 1].set_title(f"Channel {channel} Patch Deconvolved Auto Correlation")
+    # shift, corr = ac.compute_auto_corr(og_patch, shift_estimation, shift_est_func=True, normalised=True)
+    # shift = shift[valid_index]
+    # corr = corr[valid_index]
+    # axs[0, 1].plot(shift, corr)
+    # axs[0, 1].set_title(f"Channel {channel} Patch Original Cross-Correlation")
     
     # corr_filt = ac.obtain_peak_highlighted_curve(corr)
-    
-    # axs[1, 2].plot(shift, corr_filt)
-    # axs[1, 2].set_title(f"Channel {channel} Patch Deconvolved Auto Correlation Filtered")
+    # # corr_filt = corr_filt[valid_index]
+    # axs[0, 2].plot(shift, corr_filt)
+    # axs[0, 2].set_title(f"Channel {channel} Patch Original Filtered Correlation")
     
     # plt.tight_layout()
+    
+    # plt.show()
+    
+    
+    # im = axs[1, 0].imshow(deconvolved[5:-5, 5:-5], cmap='gray')
+    # axs[1, 0].set_title(f"Channel {channel} Patch Deconvolved")
+    # plt.colorbar(im, ax=axs[1, 0])
+    
+    # shift, corr = ac.compute_auto_corr(deconvolved, shift_estimation, shift_est_func=True, normalised=True)
+    # shift = shift[valid_index]
+    # corr = corr[valid_index]
+    # axs[1, 1].plot(shift, corr)
+    # axs[1, 1].set_title(f"Channel {channel} Patch Deconvolved Cross-Correlation")
+    
+    # corr_filt = ac.obtain_peak_highlighted_curve(corr)
+    # # corr_filt = corr_filt[valid_index]
+    # axs[1, 2].plot(shift, corr_filt)
+    # axs[1, 2].set_title(f"Channel {channel} Patch Deconvolved Filtered Correlation")
+    
+    # plt.tight_layout()
+    
     # plt.show()
     
     # # stack the deconvolved images
     return deconvolved, w12_vals
+
