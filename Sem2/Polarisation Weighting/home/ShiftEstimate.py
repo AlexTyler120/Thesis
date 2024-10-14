@@ -60,7 +60,7 @@ def compute_pixel_shift(img):
     img: the image to compute the pixel shift of
     """
     est_shifts = []
-    # plt.figure()
+    plt.figure()
     for i in range(img.shape[2]):
         # normalise the image
         # img_norm = (img[:, :, i] - np.mean(img[:, :, i])) / np.std(img[:, :, i])
@@ -68,13 +68,13 @@ def compute_pixel_shift(img):
         # compute the autocorrelation
         shift_vals, corr_vals = ac.compute_auto_corr(img[:,:,i], None, True)
         # print(shift_vals, corr_vals)
-        # colors = ['r', 'g', 'b']  # Define colors for each channel
-        # plt.plot(shift_vals, corr_vals, label="Normalised Correlation Channel " + str(i), color=colors[i % len(colors)])
-        # # plt.plot(shift_vals, ac.apply_savgol_filter(corr_vals), label="Savgol Filtered Correlation Channel " + str(i), color=colors[i % len(colors)], linestyle='--')
-        # plt.xlabel("Pixel Shift Values")
-        # plt.ylabel("Maximum Correlation Value")
-        # plt.title("Normalised Cross-Correlation")
-        # plt.legend(loc='upper left')
+        colors = ['r', 'g', 'b']  # Define colors for each channel
+        plt.plot(shift_vals, corr_vals, label="Normalised Correlation Channel " + str(i), color=colors[i % len(colors)])
+        # plt.plot(shift_vals, ac.apply_savgol_filter(corr_vals), label="Savgol Filtered Correlation Channel " + str(i), color=colors[i % len(colors)], linestyle='--')
+        plt.xlabel("Pixel Shift Values")
+        plt.ylabel("Maximum Correlation Value")
+        plt.title("Normalised Cross-Correlation")
+        plt.legend(loc='upper left')
         
         # obtain the peaks of the correlation
         filted_corr_vals = ac.obtain_peak_highlighted_curve(corr_vals)
@@ -84,13 +84,13 @@ def compute_pixel_shift(img):
         # plt.ylabel("Baseline Subtracted Correlation Value")
         # plt.title("Filtered Cross-Correlation")
         # plt.legend(loc='upper left')
-        # obtain the peaks of the correlation
+        # # obtain the peaks of the correlation
         peaks, steepness = obtain_correlation_peaks(shift_vals, filted_corr_vals)
 
         estiamted_shift = sort_peaks(peaks, steepness, shift_vals)
 
         est_shifts.append(estiamted_shift)
-    # plt.show()
+    plt.show()
     estimate_shift = int(np.mean(est_shifts))
 
     return estimate_shift

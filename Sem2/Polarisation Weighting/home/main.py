@@ -8,19 +8,19 @@ import PatchGetAndCombine
 from matplotlib.colors import LogNorm
 import WeightingEstimate
 import Autocorrelation
-
 from mpl_toolkits.mplot3d import Axes3D
 from gt import gt
+
 def main():
     RESIZE_VAR = 1
     GREY = False
-    SIMULATED_SHIFT = 5
+    SIMULATED_SHIFT = 10
     WEIGHTING_SIM = 0.6
     ANGLE = 0
-    PATCH_SIZE = 10
+    PATCH_SIZE = 24
 
     ### Shift estimates with polarised images ###
-    transformed_image = ImageRun.polarised_generation("fakefruit", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
+    transformed_image = ImageRun.polarised_generation("dragon", ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
     ### ###
 
     ### Shift estimates with simulated images ###
@@ -74,7 +74,7 @@ def main():
     # ImageRun.run_estimate_w1(transformed_image)
     ### ###
     
-    # gt()
+    gt()
     rgb, r, g, b, w12 = PatchRun.process_all_chanels(transformed_image, PATCH_SIZE)
     
     plt.figure(figsize=(10, 10))
@@ -97,7 +97,6 @@ def main():
     plt.imshow(rgb)
     plt.title("RGB Image")
     plt.axis('off')
-    PatchGetAndCombine.create_full_quiver(rgb, transformed_image.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12)   
     # _ = PatchGetAndCombine.create_full_quiver_with_overlap(rgb, transformed_image.shape[:2], (PATCH_SIZE, PATCH_SIZE), w12)
     plt.show()
     

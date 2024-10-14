@@ -143,14 +143,14 @@ def minimise_corr_vals(corr_vals, shift_vals):
     #             zero_idx = idx
     #             break
     loss = 1
-    for i in range(0, zero_idx - 2):
+    for i in range(0, zero_idx - 1):
         distance = zero_idx - i
         # if distance < 12*5:
         #     loss += distance * abs(corr_vals[i])
         # else:
         #     loss += abs(corr_vals[i])
         loss += distance * abs(corr_vals[i])
-    for i in range(zero_idx + 2, len(corr_vals)):
+    for i in range(zero_idx + 1, len(corr_vals)):
         distance = i - zero_idx
         # if distance < 12*5:
         #     loss += distance * abs(corr_vals[i])
@@ -184,64 +184,30 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals, 
     shifted_img: the shifted image
     shift_val: the shift value
     """
-    if np.max(shifted_img) > 1:
-        print("Normalising as max value has been reached in loss function one set")
-        shifted_img = shifted_img / np.max(shifted_img)
+    # check num channels of shifted_img
+    
+        
     psf_estimate = get_img_psf(estimate, shift_val)
-    # deconvolved_image = sk.restoration.wiener(shifted_img, psf_estimate, balance=0)
-    # deconvolved_image = sk.restoration.richardson_lucy(shifted_img, psf_estimate, num_iter=1)
-    deconvolved_image = deconvolve_img(shifted_img, psf_estimate)
-    # print(f"Deconvolved image shape: {deconvolved_image.shape}")
-    # normalise deconvolved image
-    deconvolved_img_norm = deconvolved_image / np.max(deconvolved_image)
-    # if np.isnan(deconvolved_img_norm).any():
-    #     return 100
-    # obtain tyhe correlation values of the deconvolved image
-    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_img_norm, shift_val, shift_est_func=True, normalised=True)
-    # Extract correlation values within shift values from -12 to 12
-    # valid_indices = np.where((shift_vals >= -5) & (shift_vals <= 5))[0]
-    
-    # corr_vals = corr_vals[valid_indices]
-    # shift_vals = shift_vals[valid_indices]
-    
-    # if np.max(corr_vals) - np.min(corr_vals) == 0:
-    #     plt.figure()
-    #     plt.imshow(shifted_img, cmap='gray')
-    #     plt.figure()
-    #     plt.imshow(deconvolved_img_norm, cmap='gray')
-    #     plt.show()
-    #     print(corr_vals)
-    #     return 100
-    
-    corr_filt = ac.obtain_peak_highlighted_curve(corr_vals)
-    # print(corr_vals.shape)
-    # print(corr_filt.shape)
-    # normalise corr_filt between 0 - 1
-    # check if nan in corr_filt
-    # range_corr_filt = np.max(corr_filt) - np.min(corr_filt)
-    # if range_corr_filt != 0:
-    #     corr_filt = (corr_filt - np.min(corr_filt)) / range_corr_filt
-    # else:
-    #     # If the values are identical, no need to normalize as they are already uniform
-    #     corr_filt = corr_filt - np.min(corr_filt)
+    if len(shifted_img.shape) == 3:
+        deconvolved_image = deconvolve_img_colour(shifted_img, psf_estimate)
+    else:
+        deconvolved_image = deconvolve_img(shifted_img, psf_estimate)
 
-    # corr_filt = (corr_filt - np.min(corr_filt)) / range_corr_filt
-    loss = 0.1*minimise_corr_vals(corr_vals, shift_vals)
-    # loss += check_flatness(shift_vals, corr_filt, shift_val)
-    # loss += check_gradients(corr_filt, shift_vals)
-    
+    # deconvolved_image = deconvolved_image / np.max(deconvolved_image)
+
+    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_image, shift_val, shift_est_func=True, normalised=True)
+ 
+
+    loss = minimise_corr_vals(corr_vals, shift_vals)
     pos_shift_idx = np.where(np.isclose(shift_vals, shift_val))[0].item()
     neg_shift_idx = np.where(np.isclose(shift_vals, -shift_val))[0].item()
 
-    loss += 100*corr_filt[neg_shift_idx]
-    loss += 100*corr_filt[pos_shift_idx]
+    loss += corr_vals[neg_shift_idx]
+    loss += corr_vals[pos_shift_idx]
 
     w1_vals.append(estimate)
     all_losses.append((estimate, loss))
 
-    # min_val = np.where(loss_vals == np.min(loss_vals))[0][0]
-
-    # print(f"Loss: {loss.min()} and w1: {w1_vals[min_val]}")
     return loss
 
 
@@ -262,20 +228,20 @@ def optimise_psf(shifted_img, shift_val):
                                                 bounds=[BOUNDS], 
                                                 args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
                                                 disp=False,
-                                                tol = 0.00001,
+                                                tol = 0.0001,
                                                 # mutation=(0.9, 1.4),  # Higher mutation factor to explore more aggressively
                                                 # recombination=0.4,
                                                 polish=False, # use L-BFGS-B to polish the best result
                                                 maxiter=75,
-                                                popsize = 50,
+                                                popsize = 20,
                                                 workers=30)
     # result = sp.optimize.minimize(
     #     loss_function_one_est, 
     #     x0=[0.5],  # Initial guess for w1
     #     args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
-    #     method='Powell',
+    #     method='L-BFGS-B',
     #     bounds=[BOUNDS],
-    #     tol=0.0000001,
+    #     tol=0.001,
     #     options={'disp': True}
     # )
     
@@ -286,6 +252,7 @@ def optimise_psf(shifted_img, shift_val):
 
     return est_w1, loss_value, all_losses
 
+
 def deconvolve_img(img, psf, balance = 0):
     """
     Deconvolve the image with the psf
@@ -293,5 +260,17 @@ def deconvolve_img(img, psf, balance = 0):
     psf: the psf to use
     balance: the balance parameter
     """
-    # return sk.restoration.wiener(img, psf, balance=balance)
-    return sk.restoration.richardson_lucy(img, psf, num_iter=1)
+    return sk.restoration.wiener(img, psf, balance=balance)
+    # return sk.restoration.richardson_lucy(img, psf, num_iter=2)
+    
+def deconvolve_img_colour(img, psf, balance = 0):
+    """
+    Deconvolve the image with the psf
+    img: the image to deconvolve
+    psf: the psf to use
+    balance: the balance parameter
+    """
+    deconvolved_img = np.zeros(img.shape)
+    for i in range(3):
+        deconvolved_img[:, :, i] = deconvolve_img(img[:, :, i], psf, balance)
+    return deconvolved_img
