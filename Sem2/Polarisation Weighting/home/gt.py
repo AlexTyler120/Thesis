@@ -14,14 +14,16 @@ def calc_dolp(S0, S1, S2):
     dolp = np.sqrt(S1**2 + S2**2) / s0_
     return np.clip(dolp, 0, 1)
 
-def calc_aolp(S1, S2):
-    s1_ = np.copy(S1)
-    s1_[S1 == 0] = 1e-6
-    phase = np.rad2deg(np.arctan2(S2, s1_))
-    mask = (phase < 0)
-    phase[mask] = phase[mask] + 180*2
-    phase /= 2
-    return np.clip(phase, 0, 180)
+def calc_aolp(S0, S1, S2):
+    # s1_ = np.copy(S1)
+    u = S2/S0
+    q = S1/S0
+    # s1_[S1 == 0] = 1e-6
+    phase = (np.degrees(np.arctan2(u, q))/2)
+    # mask = (phase < 0)
+    # phase[mask] = phase[mask] + 180*2
+    # phase /= 2
+    return phase
 
 def gt():
     # i0path = 'python/test_im/fakefruit/low_fakefruit_0.png'
@@ -36,10 +38,12 @@ def gt():
     # i90path = 'python/test_im/fakefruit/rect_fakefruit_90.png'
     # i135path = 'python/test_im/fakefruit/rect_fakefruit_135.png'
     # i45path = 'python/test_im/fakefruit/rect_fakefruit_45.png'
-    i0path = 'python/test_im/dragon/small_dragon_0.png'
-    i90path = 'python/test_im/dragon/small_dragon_90.png'
-    i135path = 'python/test_im/dragon/small_dragon_135.png'
-    i45path = 'python/test_im/dragon/small_dragon_45.png'
+    prefix = "rect_"
+    item = "fakefruit"
+    i0path = 'python/test_im/'+item+'/'+prefix+item+'_0.png'
+    i90path = 'python/test_im/'+item+'/'+prefix+item+'_90.png'
+    i135path = 'python/test_im/'+item+'/'+prefix+item+'_135.png'
+    i45path = 'python/test_im/'+item+'/'+prefix+item+'_45.png'
     I0 = cv2.imread(i0path)
     # bgr to rgb
     I0 = I0[:, :, ::-1]
@@ -69,20 +73,16 @@ def gt():
         I90_channel = I90[:, :, i] 
         I135_channel = I135[:, :, i]
 
-        # Normalize the images by the global max and min
-        global_min = min(I0_channel.min(), I45_channel.min(), I90_channel.min(), I135_channel.min())
-        global_max = max(I0_channel.max(), I45_channel.max(), I90_channel.max(), I135_channel.max())
-
-        I0_channel = (I0_channel - global_min) / (global_max - global_min)
-        I45_channel = (I45_channel - global_min) / (global_max - global_min)
-        I90_channel = (I90_channel - global_min) / (global_max - global_min)
-        I135_channel = (I135_channel - global_min) / (global_max - global_min)
+        I0_channel = cv2.normalize(I0_channel, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        I45_channel = cv2.normalize(I45_channel, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        I90_channel = cv2.normalize(I90_channel, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        I135_channel = cv2.normalize(I135_channel, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
         # Normalize the images using cv2's normalize function
 
         # Calculate the Stokes parameters
         S0, S1, S2, S3 = calc_stokes(I0_channel, I45_channel, I90_channel, I135_channel)
-        theta_deg = calc_aolp(S1, S2)
+        theta_deg = calc_aolp(S0, S1, S2)
         dolp = calc_dolp(S0, S1, S2)
         
         dop_angles[color] = dolp
@@ -96,42 +96,44 @@ def gt():
     plt.subplot(1,2,1)
     plt.imshow(polarization_angles['R'], cmap='jet')
     plt.title('AoLP')
+    plt.colorbar()
     plt.axis('off')
     plt.subplot(1,2,2)
-    plt.imshow(dop_angles['R'], cmap='jet')
+    plt.imshow(np.clip(dop_angles['R'], 0, 1), cmap='jet')
     plt.title('DoLP')
+    plt.colorbar()
     plt.figure()
-    plt.imshow(np.abs(I0_channel - I90_channel), cmap='jet')
+    difference = I0_channel - I90_channel
+    vmax = np.max(np.abs(difference))
+    plt.imshow(difference, cmap='jet', vmin=-vmax, vmax=vmax)
     plt.title('I0 - I90')
+    plt.colorbar()
     plt.axis('off')
-    # plt.title('Polarization Angle Red')
-    # plt.colorbar()
-    # plt.axis('off')
-    # plt.figure()
-    # plt.imshow(polarization_angles['G'], cmap='jet')
-    # plt.title('Polarization Angle')
-    # plt.colorbar()
-    # plt.figure()
-    # plt.imshow(polarization_angles['B'], cmap='jet')
-    # plt.colorbar()
-    # plt.title('Polarization Angle')
+    plt.figure()
+    plt.imshow(I0_channel, cmap="jet")
+    plt.title('I0')
+    plt.axis('off')
     
-    # plt.figure()
-    # plt.imshow(dop_angles['R'], cmap='jet')
-    # plt.title('DOLP Red')
-    # plt.colorbar()
-    # plt.figure()
-    # plt.imshow(dop_angles['G'], cmap='jet')
+    w1_gt = I90_channel# / (I0_channel + I90_channel)
+    w2_gt = I0_channel# / (I0_channel + I90_channel)
     
-    # plt.title('DOLP Green')
-    # plt.colorbar()
-    # plt.figure()
-    # plt.imshow(dop_angles['B'], cmap='jet')
-    # plt.title('DOLP Blue')
-    # plt.colorbar()
+    angle = np.arctan2(w2_gt, w1_gt)
+    angle = np.rad2deg(angle)
+    mag = np.sqrt(w1_gt**2 + w2_gt**2)
+    
+    plt.figure()
+    plt.subplot(1,2,1)
+    plt.imshow(angle, cmap='jet')
+    plt.title('AoLP GT')
+    plt.axis('off')
+    plt.colorbar()
+    plt.subplot(1,2,2)
+    plt.imshow(mag, cmap='jet')
+    plt.title('DoLP GT')
+    plt.axis('off')
+    plt.colorbar()
     
     
     
-# gt()
 # gt()
 # plt.show()

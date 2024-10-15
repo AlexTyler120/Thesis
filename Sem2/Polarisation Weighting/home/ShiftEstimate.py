@@ -78,19 +78,12 @@ def compute_pixel_shift(img):
         
         # obtain the peaks of the correlation
         filted_corr_vals = ac.obtain_peak_highlighted_curve(corr_vals)
-        # print(filted_corr_vals)
-        # plt.plot(shift_vals, filted_corr_vals, label="Filtered Correlation Channel " + str(i), color = colors[i % len(colors)])
-        # plt.xlabel("Pixel Shift Values")
-        # plt.ylabel("Baseline Subtracted Correlation Value")
-        # plt.title("Filtered Cross-Correlation")
-        # plt.legend(loc='upper left')
-        # # obtain the peaks of the correlation
         peaks, steepness = obtain_correlation_peaks(shift_vals, filted_corr_vals)
 
         estiamted_shift = sort_peaks(peaks, steepness, shift_vals)
 
         est_shifts.append(estiamted_shift)
-    plt.show()
+    # plt.show()
     estimate_shift = int(np.mean(est_shifts))
 
     return estimate_shift

@@ -39,15 +39,16 @@ def process_channel(patches, channel, shift, save_data = False, original_patches
     deconvolved_imgs = []
     w12_vals = []
     channel_path = f"/home/alext12/Desktop/Thesis/Sem2/Polarisation Weighting/channel{channel}/"
-    # for i, patch in enumerate(patches[63:], start=63):
+    # for i, patch in enumerate(patches[18:], start=18):
     for i, patch in enumerate(patches):
         print(f"Processing patch {i + 1} of {len(patches)} channel {channel}")
         print(f"Patch shape: {patch.shape}")
+
         # trim patch to patch size
         if original_patches == None:
-            deconvolved_img, w12val = ImageRun.run_estimate_w1_w2_patch(patch, channel, shift)
+            deconvolved_img, w12val, other_dec = ImageRun.run_estimate_w1_w2_patch(patch, channel, shift)
         else:
-            deconvolved_img, w12val = ImageRun.run_estimate_w1_w2_patch(patch, channel, shift, og_patch = original_patches[i])
+            deconvolved_img, w12val, other_dec = ImageRun.run_estimate_w1_w2_patch(patch, channel, shift, og_patch = original_patches[i])
         if save_data:
             cv2.imwrite(f"{channel_path}patch_{i}.png", deconvolved_img*255)
         
@@ -58,7 +59,7 @@ def process_channel(patches, channel, shift, save_data = False, original_patches
         with open(f'{channel_path}w12vals.pkl', 'wb') as f:
             pickle.dump(w12_vals, f)
             
-    return deconvolved_imgs, w12_vals
+    return deconvolved_imgs, w12_vals, other_dec
 
 def process_color(patches, shift, original_patches = None):
     deconvolved_imgs = []
@@ -73,7 +74,7 @@ def process_color(patches, shift, original_patches = None):
         
     return deconvolved_imgs, w12_vals
 
-def process_all_chanels(blurred_img, PATCH_SIZE):
+def process_all_chanels(blurred_img, PATCH_SIZE, prefix, name):
     
     RED_CHANNEL = 0
     GREEN_CHANNEL = 1
@@ -87,27 +88,26 @@ def process_all_chanels(blurred_img, PATCH_SIZE):
     # blurred_img = cv2.normalize(blurred_img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     patches = PatchGetAndCombine.extract_image_patches_overlap(blurred_img, (PATCH_SIZE, PATCH_SIZE))
     
-    # original_image = cv2.imread("python/test_im/fakefruit/low_fakefruit_0.png")
+    original_image = cv2.imread("python/test_im/fakefruit/sq_fakefruit_90.png")
     # normalise original each cahnel;
     
-    # original_image = cv2.normalize(original_image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    # patches_original = PatchGetAndCombine.extract_image_patches_overlap(original_image, (PATCH_SIZE, PATCH_SIZE))
+    original_image = cv2.normalize(original_image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+    patches_original = PatchGetAndCombine.extract_image_patches_overlap(original_image, (PATCH_SIZE, PATCH_SIZE))
     
-    filename = "wiener_0"
-    prefix = "small"
-    name = "dragon_shift10"
-    
-    # deconvolved_imgs_r, w12_vals_r = process_channel(patches, RED_CHANNEL, shift_estimation, save_data=False, original_patches = None)
-    # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_red.pkl", 'wb') as f:
+    filename = "richard_4"
+    # filename = "wiener_0"
+    # name = "fruit"
+    # deconvolved_imgs_r, w12_vals_r, _ = process_channel(patches, RED_CHANNEL, shift_estimation, save_data=False, original_patches = None)
+    # with open ("pickles/"+filename+"/"+prefix+name+"_red.pkl", 'wb') as f:
     #     pickle.dump(deconvolved_imgs_r, f)
-    # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_w12_red.pkl", 'wb') as f:
-    #     pickle.dump(w12_vals_r, f)
-        
-    with open("pickles/"+filename+"/"+prefix+"_"+name+"_red.pkl", 'rb') as f:
+    # with open ("pickles/"+filename+"/"+prefix+name+"_w12_red.pkl", 'wb') as f:
+    #   pickle.dump(w12_vals_r, f)    
+    
+    with open("pickles/"+filename+"/"+prefix+name+"_red.pkl", 'rb') as f:
         deconvolved_imgs_r = pickle.load(f)
-    with open("pickles/"+filename+"/"+prefix+"_"+name+"_w12_red.pkl", 'rb') as f:
+    with open("pickles/"+filename+"/"+prefix+name+"_w12_red.pkl", 'rb') as f:
         w12_vals_r = pickle.load(f)
-        
+
     im_r, angle_r, mag_r = PatchGetAndCombine.reconstruct_image_patch_intensity_overlap(patches, deconvolved_imgs_r, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), 0, w12_vals_r)
     
     # deconvolved_imgs_g, w12_vals_g = process_channel(patches, GREEN_CHANNEL, shift_estimation, save_data=False, original_patches = None)
@@ -116,23 +116,23 @@ def process_all_chanels(blurred_img, PATCH_SIZE):
     # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_w12_green.pkl", 'wb') as f:
     #     pickle.dump(w12_vals_g, f)
     
-    # with open("pickles/"+filename+"/"+prefix+"_"+name+"_green.pkl", 'rb') as f:
+    # with open("pickles/"+filename+"/"+prefix+name+"_green.pkl", 'rb') as f:
     #     deconvolved_imgs_g = pickle.load(f)
-    # with open("pickles/"+filename+"/"+prefix+"_"+name+"_w12_green.pkl", 'rb') as f:
+    # with open("pickles/"+filename+"/"+prefix+name+"_w12_green.pkl", 'rb') as f:
     #     w12_vals_g = pickle.load(f)
     # im_g, angle_g, mag_g = PatchGetAndCombine.reconstruct_image_patch_intensity_overlap(patches, deconvolved_imgs_g, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), 1, w12_vals_g)
     
     
-    # deconvolved_imgs_b, w12_vals_b = process_channel(patches, BLUE_CHANNEL, shift_estimation, save_data=False, original_patches = None) 
-    # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_blue.pkl", 'wb') as f:
-    #     pickle.dump(deconvolved_imgs_b, f)
-    # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_w12_blue.pkl", 'wb') as f:
-    #     pickle.dump(w12_vals_b, f)
+    # # deconvolved_imgs_b, w12_vals_b = process_channel(patches, BLUE_CHANNEL, shift_estimation, save_data=False, original_patches = None) 
+    # # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_blue.pkl", 'wb') as f:
+    # #     pickle.dump(deconvolved_imgs_b, f)
+    # # with open ("pickles/"+filename+"/"+prefix+"_"+name+"_w12_blue.pkl", 'wb') as f:
+    # #     pickle.dump(w12_vals_b, f)
 
     
-    # with open("pickles/"+filename+"/"+prefix+"_"+name+"_blue.pkl", 'rb') as f:
+    # with open("pickles/"+filename+"/"+prefix+name+"_blue.pkl", 'rb') as f:
     #     deconvolved_imgs_b = pickle.load(f)
-    # with open("pickles/"+filename+"/"+prefix+"_"+name+"_w12_blue.pkl", 'rb') as f:
+    # with open("pickles/"+filename+"/"+prefix+name+"_w12_blue.pkl", 'rb') as f:
     #     w12_vals_b = pickle.load(f)
     
     # im_b, angle_b, mag_b = PatchGetAndCombine.reconstruct_image_patch_intensity_overlap(patches, deconvolved_imgs_b, blurred_img.shape[:2], (PATCH_SIZE, PATCH_SIZE), 2, w12_vals_b)
@@ -166,6 +166,11 @@ def process_all_chanels(blurred_img, PATCH_SIZE):
     # plt.imshow(blurred_img)
     # plt.title("Blurred Image")
     # plt.axis('off')
+    # plt.figure()
+    # plt.title("Reconstructed Image")
+    # plt.imshow(reconstructed_image)
+    # plt.axis('off')
+
     
     plt.show()
 

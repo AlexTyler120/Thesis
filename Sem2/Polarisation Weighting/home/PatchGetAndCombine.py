@@ -187,6 +187,19 @@ def extract_image_patches_overlap(image, patch_size):
                 patches.append(padded_patch)
     
     return patches
+def tukey_window(N, alpha=0.5):
+    """
+    Create a 1D Tukey window of length N and taper ratio alpha.
+    """
+    # Create the Tukey window
+    window = np.ones(N)
+    
+    # Handle the flat part of the window (center)
+    for n in range(int(alpha * (N - 1) / 2)):
+        window[n] = 0.5 * (1 + np.cos(np.pi * (2 * n / (alpha * (N - 1)) - 1)))
+        window[N - n - 1] = window[n]
+    
+    return window
 
 def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, image_size, patch_size, channel, w12vals):
     """
@@ -206,9 +219,15 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     image_height, image_width = image_size
     patch_height, patch_width = patch_size
     padding_size = patch_width // 2
-
+    # Create Hanning window
+    # hanning_window = np.outer(np.hanning(patch_height), np.hanning(patch_width))
+    # hanning_window = np.outer(np.hamming(patch_height), np.hamming(patch_width))
+    # alpha = 0.4  # Adjust alpha to control the amount of tapering
+    # hanning_window = np.outer(tukey_window(patch_height, alpha), tukey_window(patch_width, alpha))
     # Create empty arrays for reconstructed images, angle, magnitude, and weight maps
+
     reconstructed_image = np.zeros((image_height, image_width), dtype=np.float32)
+    recon_other = np.zeros((image_height, image_width), dtype=np.float32)
     I_0_total = np.zeros_like(reconstructed_image)
     I_90_total = np.zeros_like(reconstructed_image)
     angle_map = np.zeros_like(reconstructed_image)
@@ -226,26 +245,33 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     for y in range(0, image_height - patch_height + 1, step_y):
         for x in range(0, image_width - patch_width + 1, step_x):
             patch = patches[patch_idx]
-            deconvolved_patch = deconvolved_patches[patch_idx]
+            deconvolved_patch = deconvolved_patches[patch_idx] 
+            
             w1, w2 = w12vals[patch_idx]
-            cropp = 12
-            cropped_deconvolved_patch = deconvolved_patch[cropp:-cropp, cropp:-cropp]
+            decon_other = WeightingEstimate.deconvolve_img(patch[:,:, 0], WeightingEstimate.get_img_psf(w1, 5), wiener=True)
+            cropp = 6
+            cropped_deconvolved_patch = deconvolved_patch[cropp:-cropp, cropp:-cropp] #* hanning_window
+            decon_cropped = decon_other[cropp:-cropp, cropp:-cropp]
+            
             I_0_patch = cropped_deconvolved_patch * w2
             I_90_patch = cropped_deconvolved_patch * w1
 
             # Blend the deconvolved patch into the reconstructed image
             reconstructed_image[y:y + patch_height, x:x + patch_width] += cropped_deconvolved_patch
+            recon_other[y:y + patch_height, x:x + patch_width] += decon_cropped
+            
             I_0_total[y:y + patch_height, x:x + patch_width] += I_0_patch
             I_90_total[y:y + patch_height, x:x + patch_width] += I_90_patch
 
             # Blend the w1 and w2 values
-            w1_map[y:y + patch_height, x:x + patch_width] += w1
-            w2_map[y:y + patch_height, x:x + patch_width] += w2
+            w1_map[y:y + patch_height, x:x + patch_width] += w2
+            w2_map[y:y + patch_height, x:x + patch_width] += w1
             
-            w_diff_map[y:y + patch_height, x:x + patch_width] += np.abs(w1 - w2)
+            
 
             # Update the weight map for averaging
             weight_map[y:y + patch_height, x:x + patch_width] += 1
+            # weight_map[y:y + patch_height, x:x + patch_width] += hanning_window
 
             patch_idx += 1
 
@@ -256,11 +282,13 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     w_diff_map /= np.maximum(weight_map, 1)
     I_0_total /= np.maximum(weight_map, 1)
     I_90_total /= np.maximum(weight_map, 1)
-
+    
+    w_diff_map = w2_map - w1_map
+    
     # Calculate the final angle and magnitude maps from the blended w1 and w2 values
     angle_map = np.degrees(np.arctan2(w2_map, w1_map))
     magnitude_spectrum = np.sqrt(w1_map**2 + w2_map**2)
-
+    
     num_rows = image_height // patch_height
     num_cols = image_width // patch_width
     patches_row_width = patch_width * num_cols
@@ -274,8 +302,12 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     w_diff_map = w_diff_map[:patches_col_height, :patches_row_width]
     w1_map = w1_map[:patches_col_height, :patches_row_width]
     w2_map = w2_map[:patches_col_height, :patches_row_width]
-
-
+    
+    # normalise magnitude spectrum
+    magnitude_spectrum = (magnitude_spectrum - np.min(magnitude_spectrum)) / (np.max(magnitude_spectrum) - np.min(magnitude_spectrum))
+    angle_map *= magnitude_spectrum
+    
+    # angle_map = np.clip(angle_map, 0, 30)
     # Plot the angle map, magnitude spectrum, and intensity channels
     plt.figure()
     plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
@@ -285,7 +317,7 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     
     plt.figure()
     plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
-    plt.imshow(angle_map, cmap='jet', alpha=0.5)
+    plt.imshow(angle_map, cmap='jet', alpha=0.5)#, vmin = 0, vmax = 90)
     plt.title(f"Angle Map channel {channel}")
     plt.colorbar()
     
@@ -299,14 +331,18 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     plt.imshow(reconstructed_image, cmap='gray')
     plt.title(f"Reconstructed Image channel {channel}")
     
+    # plt.figure()
+    # plt.title(f"constructued times angle")
+    # plt.imshow(reconstructed_image * w_diff_map, cmap='jet')
+    # plt.colorbar()
     plt.figure()
-    plt.title(f"constructued times angle")
-    plt.imshow(reconstructed_image * w_diff_map, cmap='jet')
+    plt.title(f"w diff map")
+    plt.imshow(w_diff_map, cmap='jet')
     plt.colorbar()
     
-    # plt.figure()
-    # plt.title(f"constructued times magnitude")
-    # plt.imshow(reconstructed_image * magnitude_spectrum, cmap='jet')
-    # plt.colorbar()
-    
+    plt.figure()
+    plt.title(f"recon other")
+    plt.imshow(recon_other, cmap='gray')
+    plt.colorbar()
+
     return reconstructed_image, angle_map, magnitude_spectrum

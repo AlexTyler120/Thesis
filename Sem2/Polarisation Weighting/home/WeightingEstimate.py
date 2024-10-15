@@ -145,17 +145,9 @@ def minimise_corr_vals(corr_vals, shift_vals):
     loss = 1
     for i in range(0, zero_idx - 1):
         distance = zero_idx - i
-        # if distance < 12*5:
-        #     loss += distance * abs(corr_vals[i])
-        # else:
-        #     loss += abs(corr_vals[i])
         loss += distance * abs(corr_vals[i])
     for i in range(zero_idx + 1, len(corr_vals)):
         distance = i - zero_idx
-        # if distance < 12*5:
-        #     loss += distance * abs(corr_vals[i])
-        # else:
-        #     loss += abs(corr_vals[i])
         loss += distance * abs(corr_vals[i])
     return loss
 
@@ -196,14 +188,22 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals, 
     # deconvolved_image = deconvolved_image / np.max(deconvolved_image)
 
     shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_image, shift_val, shift_est_func=True, normalised=True)
- 
-
-    loss = minimise_corr_vals(corr_vals, shift_vals)
+    
+    valid_index = np.where((np.abs(shift_vals) <= 6) & (shift_vals != 0))[0]
+    valid_index = valid_index.astype(int)
+    # print(valid_index)
+    shift_vals_corrected = []
+    corr_vals_corrected = []
+    for index in valid_index:
+        shift_vals_corrected.append(shift_vals[index])
+        corr_vals_corrected.append(corr_vals[index])
+    
+    loss = minimise_corr_vals(corr_vals_corrected, shift_vals_corrected)
     pos_shift_idx = np.where(np.isclose(shift_vals, shift_val))[0].item()
     neg_shift_idx = np.where(np.isclose(shift_vals, -shift_val))[0].item()
 
-    loss += corr_vals[neg_shift_idx]
-    loss += corr_vals[pos_shift_idx]
+    loss += np.abs(corr_vals[neg_shift_idx])
+    loss += np.abs(corr_vals[pos_shift_idx])
 
     w1_vals.append(estimate)
     all_losses.append((estimate, loss))
@@ -224,26 +224,26 @@ def optimise_psf(shifted_img, shift_val):
     shift_val = shift_val
     all_losses = []
     
-    result = sp.optimize.differential_evolution(loss_function_one_est, 
-                                                bounds=[BOUNDS], 
-                                                args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
-                                                disp=False,
-                                                tol = 0.0001,
-                                                # mutation=(0.9, 1.4),  # Higher mutation factor to explore more aggressively
-                                                # recombination=0.4,
-                                                polish=False, # use L-BFGS-B to polish the best result
-                                                maxiter=75,
-                                                popsize = 20,
-                                                workers=30)
-    # result = sp.optimize.minimize(
-    #     loss_function_one_est, 
-    #     x0=[0.5],  # Initial guess for w1
-    #     args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
-    #     method='L-BFGS-B',
-    #     bounds=[BOUNDS],
-    #     tol=0.001,
-    #     options={'disp': True}
-    # )
+    # result = sp.optimize.differential_evolution(loss_function_one_est, 
+    #                                             bounds=[BOUNDS], 
+    #                                             args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
+    #                                             disp=False,
+    #                                             tol = 0.0001,
+    #                                             # mutation=(0.9, 1.4),  # Higher mutation factor to explore more aggressively
+    #                                             # recombination=0.4,
+    #                                             polish=False, # use L-BFGS-B to polish the best result
+    #                                             maxiter=75,
+    #                                             popsize = 20,
+    #                                             workers=30)
+    result = sp.optimize.minimize(
+        loss_function_one_est, 
+        x0=[0.5],  # Initial guess for w1
+        args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
+        method='Powell',
+        bounds=[BOUNDS],
+        tol=0.00001,
+        options={'disp': True}
+    )
     
     est_w1 = result.x
     loss_value = result.fun
@@ -253,15 +253,18 @@ def optimise_psf(shifted_img, shift_val):
     return est_w1, loss_value, all_losses
 
 
-def deconvolve_img(img, psf, balance = 0):
+def deconvolve_img(img, psf, balance = 0, wiener = False, ri_iter = 4):
     """
     Deconvolve the image with the psf
     img: the image to deconvolve
     psf: the psf to use
     balance: the balance parameter
     """
-    return sk.restoration.wiener(img, psf, balance=balance)
-    # return sk.restoration.richardson_lucy(img, psf, num_iter=2)
+    # return sk.restoration.wiener(img, psf, balance=balance)
+    if wiener:
+        return sk.restoration.wiener(img, psf, balance=balance)
+    else:
+        return sk.restoration.richardson_lucy(img, psf, num_iter=ri_iter)
     
 def deconvolve_img_colour(img, psf, balance = 0):
     """
