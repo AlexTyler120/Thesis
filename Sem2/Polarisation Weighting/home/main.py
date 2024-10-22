@@ -20,7 +20,7 @@ def main():
     PATCH_SIZE = 12
     item = "fakefruit"
     prefix = "rect_"
-    ### Shift estimates with polarised images ###
+    ### Shift estimatrec1es with polarised images ###
     transformed_image = ImageRun.polarised_generation(item, prefix, ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
     ### ###
     

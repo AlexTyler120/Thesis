@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import cv2
 
 def calc_stokes(I0, I45, I90, I135):
-    S0 = 0.5 * (I0 + I90 + I45 + I135)
+    S0 = 0.5*(I0 + I90 + I45 + I135)
     S1 = I0 - I90
     S2 = I45 - I135
     S3 = I135 - I45
@@ -15,14 +15,15 @@ def calc_dolp(S0, S1, S2):
     return np.clip(dolp, 0, 1)
 
 def calc_aolp(S0, S1, S2):
-    # s1_ = np.copy(S1)
-    u = S2/S0
-    q = S1/S0
-    # s1_[S1 == 0] = 1e-6
-    phase = (np.degrees(np.arctan2(u, q))/2)
-    # mask = (phase < 0)
-    # phase[mask] = phase[mask] + 180*2
-    # phase /= 2
+    s1_ = np.copy(S1)
+    
+    s1_[S1 == 0] = 1e-6
+    u = S2#/S0
+    q = s1_#/S0
+    phase = np.abs(np.degrees(np.arctan2(u, q)))
+    mask = (phase < 0)
+    phase[mask] = phase[mask] + 180*2
+    phase /= 2
     return phase
 
 def gt():
@@ -89,36 +90,55 @@ def gt():
         
         # Store the result in a dictionary
         polarization_angles[color] = theta_deg
-
-        break
+        print(color)
     
     plt.figure()
-    plt.subplot(1,2,1)
-    plt.imshow(polarization_angles['R'], cmap='jet')
+    # plt.subplot(1,2,1)
+    # plt.imshow(np.clip(polarization_angles['R'], -55, 25), cmap='jet')
+    plt.imshow(np.clip(polarization_angles['B'], 0, 90), cmap='jet')
     plt.title('AoLP')
     plt.colorbar()
     plt.axis('off')
-    plt.subplot(1,2,2)
-    plt.imshow(np.clip(dop_angles['R'], 0, 1), cmap='jet')
-    plt.title('DoLP')
-    plt.colorbar()
-    plt.figure()
-    difference = I0_channel - I90_channel
-    vmax = np.max(np.abs(difference))
-    plt.imshow(difference, cmap='jet', vmin=-vmax, vmax=vmax)
-    plt.title('I0 - I90')
-    plt.colorbar()
-    plt.axis('off')
-    plt.figure()
-    plt.imshow(I0_channel, cmap="jet")
-    plt.title('I0')
-    plt.axis('off')
+    # plt.subplot(1,2,2)
+    # plt.imshow(np.clip(dop_angles['B'], 0, 1), cmap='jet')
+    # plt.title('DoLP')
+    # plt.colorbar()
+    # plt.figure()
+    # difference = I0_channel - I90_channel
+    # vmax = np.max(np.abs(difference))
+    # plt.imshow(difference, cmap='jet', vmin=-vmax, vmax=vmax)
+    # plt.title('I0 - I90')
+    # plt.colorbar()
+    # plt.axis('off')
+    # plt.figure()
+    # plt.imshow(I0_channel, cmap="jet")
+    # plt.title('I0')
+    # plt.axis('off')
     
-    w1_gt = I90_channel# / (I0_channel + I90_channel)
-    w2_gt = I0_channel# / (I0_channel + I90_channel)
+    I0_height = I0_channel.shape[0]
+    I0_width = I0_channel.shape[1]
+    w1_gt = np.zeros((I0_height, I0_width))
+    w2_gt = np.zeros((I0_height, I0_width))
     
+    for i in range(I0_height):
+        for j in range(I0_width):
+            I0_int = I0_channel[i, j]
+            I90_int = I90_channel[i, j]
+            int_var = [I0_int, I90_int]
+            int_var = int_var / np.sum(int_var)
+            w1_gt[i, j] = int_var[1]
+            w2_gt[i, j] = int_var[0]
+            
+    s0, s1, s2, s3 = calc_stokes(I0_channel, I45_channel, I90_channel, I135_channel)
+    
+    w1_gt = (s0 + s1) / (2 * s0)
+    w2_gt = (s0 - s1) / (2 * s0)
+            
     angle = np.arctan2(w2_gt, w1_gt)
     angle = np.rad2deg(angle)
+    # angle = np.clip(angle, 38, 50)
+    # normalise 0 - 90
+    # angle = (angle - np.min(angle)) / (np.max(angle) - np.min(angle))
     mag = np.sqrt(w1_gt**2 + w2_gt**2)
     
     plt.figure()

@@ -7,6 +7,7 @@ import numpy as np
 from skimage import restoration as sk
 import cv2
 import pickle
+import scipy as sp
 
 def polarised_generation(file_name, prefix, degree, resize_var, grey, shift):
     """
@@ -116,59 +117,70 @@ def run_estimate_w1_w2_patch(patch, channel, shift_estimation, og_patch = None):
     # histogram equalisation
     shift_estimation = shift_estimation * resize_var
     
-    # shift, corr = ac.compute_auto_corr(img_channel_grey, shift_estimation, shift_est_func=True, normalised=True)
-    # shift = np.array(shift)
-    # corr = np.array(corr)
+    shift, corr = ac.compute_auto_corr(img_channel_grey, shift_estimation, shift_est_func=True, normalised=True)
+    shift = np.array(shift)
+    corr = np.array(corr)
 
-    # valid_indicies = []
-    # for i in range(len(shift)):
-    #     if np.abs(shift[i]) <= 6:
-    #         valid_indicies.append(i)
-    # valid_indicies = np.array(valid_indicies)
+    valid_indicies = []
+    for i in range(len(shift)):
+        if np.abs(shift[i]) <= 6:
+            valid_indicies.append(i)
+    valid_indicies = np.array(valid_indicies)
     
-    # fig, axs = plt.subplots(2, 2, figsize=(15, 10))
-    # # Increase contrast using histogram equalization
-    # # img_channel_grey = cv2.equalizeHist((img_channel_grey * 255).astype(np.uint8)) / 255.0
-    # im = axs[0, 0].imshow(img_channel_grey[6:-6, 6:-6], cmap='gray', vmin=0, vmax=1)
-    # axs[0, 0].set_title(f"Channel {channel} Patch Blurred")
-    # # plt.colorbar(im, ax=axs[0])
-    # axs[1, 1].plot(shift[valid_indicies], corr[valid_indicies], label = "Blurred")
-    # axs[1, 1].set_title(f"Channel {channel} Patch Cross-Correlation")
+    if og_patch is not None:
+        fig, axs = plt.subplots(2, 2, figsize=(15, 10))
+        # Increase contrast using histogram equalization
+        # img_channel_grey = cv2.equalizeHist((img_channel_grey * 255).astype(np.uint8)) / 255.0
+        im = axs[0, 0].imshow(img_channel_grey[6:-6, 6:-6], cmap='gray', vmin=0, vmax=1)
+        axs[0, 0].set_title(f"Channel {channel} Patch Blurred")
+        # plt.colorbar(im, ax=axs[0])
+        axs[1, 1].plot(shift[valid_indicies], corr[valid_indicies], label = "Blurred")
+        axs[1, 1].set_title(f"Channel {channel} Patch Cross-Correlation")
     
-    est1, loss, _ = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
-    est2 = 1 - est1
-    w12_vals = [est1, est2]
-    print(f"psf {WeightingEstimate.get_img_psf(est1, shift_estimation)}")
-    deconvolved = WeightingEstimate.deconvolve_img(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation))
+    # est1, loss, _ = WeightingEstimate.optimise_psf(img_channel_grey, shift_estimation)
+    # est2 = 1 - est1
+    # w12_vals = [est1, est2]
     
-    deconvolved = cv2.resize(deconvolved, (patch.shape[1], patch.shape[0]))
-    shift_estimation = shift_estimation // resize_var
+    est, loss, _ = WeightingEstimate.optimise_psf_2(img_channel_grey, shift_estimation)
+    w12_vals = [est[0], est[1]]
+    # w12_vals = [0.5, 0.4]
+    # deconvolved = WeightingEstimate.deconvolve_img(img_channel_grey, WeightingEstimate.get_img_psf(est1, shift_estimation))
     
-    # shift_dec, corr_dec = ac.compute_auto_corr(deconvolved, shift_estimation, shift_est_func=True, normalised=True)
-    # shift_dec = np.array(shift_dec)
-    # corr_dec = np.array(corr_dec)
-    # corr_diffs = []
-    # im = axs[0, 1].imshow(og_patch[6:-6, 6:-6], cmap='gray', vmin=0, vmax=1)
-    # axs[0, 1].set_title(f"Channel {channel} Patch Original")
-    # # plt.colorbar(im, ax=axs[0, 1])
-    # shift_og, corr_og = ac.compute_auto_corr(og_patch, shift_estimation, shift_est_func=True, normalised=True)
-    # shift_og = np.array(shift_og)
-    # corr_og = np.array(corr_og)
-    # axs[1, 1].plot(shift_og[valid_indicies], corr_og[valid_indicies], label="Original")
-    # axs[1, 1].set_title(f"Channel {channel} Patch Original Cross-Correlation")
-    # # Increase contrast using histogram equalization for the deconvolved image
-    # deconvolved_eq = cv2.equalizeHist((deconvolved * 255).astype(np.uint8)) / 255.0
-    # im = axs[1, 0].imshow(deconvolved[6:-6, 6:-6], cmap='gray', vmin=0, vmax=1)
-    # axs[1, 0].set_title(f"Channel {channel} Patch Deconvolved")
-    # # plt.colorbar(im, ax=axs[1, 0])
-    # axs[1, 1].plot(shift_dec[valid_indicies], corr_dec[valid_indicies], label="Deconvolved")
-    # axs[1,1].legend()
-    # # # stack the deconvolved images
-    # plt.tight_layout()
-    # plt.show()
+
+    deconvolved = WeightingEstimate.deconvolve_img(img_channel_grey, WeightingEstimate.get_img_psf_2(w12_vals[0], w12_vals[1], shift_estimation))
+    
+    # deconvolved = cv2.resize(deconvolved, (patch.shape[1], patch.shape[0]))
+    # shift_estimation = shift_estimation // resize_var
+    
+    if og_patch is not None:
+        shift_dec, corr_dec = ac.compute_auto_corr(deconvolved, shift_estimation, shift_est_func=True, normalised=True)
+        shift_dec = np.array(shift_dec)
+        corr_dec = np.array(corr_dec)
+        corr_diffs = []
+        im = axs[0, 1].imshow(og_patch[6:-6, 6:-6], cmap='gray', vmin=0, vmax=1)
+        axs[0, 1].set_title(f"Channel {channel} Patch Original")
+        # plt.colorbar(im, ax=axs[0, 1])
+        shift_og, corr_og = ac.compute_auto_corr(og_patch, shift_estimation, shift_est_func=True, normalised=True)
+        shift_og = np.array(shift_og)
+        corr_og = np.array(corr_og)
+        axs[1, 1].plot(shift_og[valid_indicies], corr_og[valid_indicies], label="Original")
+        axs[1, 1].set_title(f"Channel {channel} Patch Original Cross-Correlation")
+        # Increase contrast using histogram equalization for the deconvolved image
+        im = axs[1, 0].imshow(deconvolved[6:-6, 6:-6], cmap='gray', vmin=0, vmax=1)
+        axs[1, 0].set_title(f"Channel {channel} Patch Deconvolved")
+        # plt.colorbar(im, ax=axs[1, 0])
+        axs[1, 1].plot(shift_dec[valid_indicies], corr_dec[valid_indicies], label="Deconvolved")
+        axs[1,1].legend()
+        # # stack the deconvolved images
+        plt.tight_layout()
+        plt.figure()
+        convolved_blur = sp.signal.fftconvolve(deconvolved, WeightingEstimate.get_img_psf_2(w12_vals[0], w12_vals[1], shift_estimation), mode='same')
+        plt.imshow(convolved_blur, cmap='gray', vmin=0, vmax=1)
+        plt.title("Deconvolved Image Convolved with PSF")
+        plt.show()
     
     # dec_other = WeightingEstimate.deconvolve_img(img_channel_grey, WeightingEstimate.get_img_psf(est2, shift_estimation), wiener=True)
-    
+    print(w12_vals)
     return deconvolved, w12_vals, None
 
 def run_estimate_w1_w2_colour(patch, shift_estimation, og_patch = None):

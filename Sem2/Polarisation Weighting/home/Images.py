@@ -49,7 +49,7 @@ def create_shifted_image_polarised_y(img1, img2, shift, show=False):
     # apply a shift to the image 
     img2_shifted[shift:, :] = img2_shifted[:-shift, :]
     # combine images
-    IM_WEIGHT = 0.5
+    IM_WEIGHT = 1
     image_transformed = cv2.addWeighted(img1, IM_WEIGHT, img2_shifted, IM_WEIGHT, 0)
     # rotate iamge 90 degrees
     image_transformed = cv2.rotate(image_transformed, cv2.ROTATE_90_COUNTERCLOCKWISE)

@@ -6,6 +6,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import pickle
+
 def get_img_psf(w1, shift):
     """
     Get the image psf. That can be applied to the image for deconvolution.
@@ -151,22 +152,6 @@ def minimise_corr_vals(corr_vals, shift_vals):
         loss += distance * abs(corr_vals[i])
     return loss
 
-def get_img_psf_2(w1, w2, shift):
-    """
-    Get the image psf. That can be applied to the image for deconvolution.
-    w1: the weight of the psf
-    shift: the shift value
-    """
-    psf = np.zeros(shift + 1)
-    psf[-1] = w1
-    psf[0] = w2
-
-    # normalise
-    psf = psf / np.sum(psf)
-
-    psf = np.expand_dims(psf, axis=0)
-
-    return psf
 
 def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals, all_losses):
     """
@@ -187,23 +172,27 @@ def loss_function_one_est(estimate, shifted_img, shift_val, loss_vals, w1_vals, 
 
     # deconvolved_image = deconvolved_image / np.max(deconvolved_image)
 
-    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_image, shift_val, shift_est_func=True, normalised=True)
+    # shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_image, shift_val, shift_est_func=True, normalised=True)
+    # valid_index = np.where((np.abs(shift_vals) <= 6) & (shift_vals != 0))[0]
+    # valid_index = valid_index.astype(int)
+    # shift_vals_corrected = []
+    # corr_vals_corrected = []
+    # for index in valid_index:
+    #     shift_vals_corrected.append(shift_vals[index])
+    #     corr_vals_corrected.append(corr_vals[index])
     
-    valid_index = np.where((np.abs(shift_vals) <= 6) & (shift_vals != 0))[0]
-    valid_index = valid_index.astype(int)
-    # print(valid_index)
-    shift_vals_corrected = []
-    corr_vals_corrected = []
-    for index in valid_index:
-        shift_vals_corrected.append(shift_vals[index])
-        corr_vals_corrected.append(corr_vals[index])
-    
-    loss = minimise_corr_vals(corr_vals_corrected, shift_vals_corrected)
-    pos_shift_idx = np.where(np.isclose(shift_vals, shift_val))[0].item()
-    neg_shift_idx = np.where(np.isclose(shift_vals, -shift_val))[0].item()
+    # corr = minimise_corr_vals(corr_vals_corrected, shift_vals_corrected)
+    # pos_shift_idx = np.where(np.isclose(shift_vals, shift_val))[0].item()
+    # neg_shift_idx = np.where(np.isclose(shift_vals, -shift_val))[0].item()
 
-    loss += np.abs(corr_vals[neg_shift_idx])
-    loss += np.abs(corr_vals[pos_shift_idx])
+    # loss += np.abs(corr_vals[neg_shift_idx])
+    # loss += np.abs(corr_vals[pos_shift_idx])
+    
+    cropped_dec = deconvolved_image[6:-6, 6:-6]
+    convolved = sp.signal.fftconvolve(deconvolved_image, psf_estimate, mode='same')
+    cropped_conv = convolved[6:-6, 6:-6]
+    
+    loss = (np.abs(cropped_dec - cropped_conv).sum())**2
 
     w1_vals.append(estimate)
     all_losses.append((estimate, loss))
@@ -252,6 +241,121 @@ def optimise_psf(shifted_img, shift_val):
 
     return est_w1, loss_value, all_losses
 
+def get_img_psf_2(w1, w2, shift):
+    """
+    Get the image psf. That can be applied to the image for deconvolution.
+    w1: the weight of the psf
+    shift: the shift value
+    """
+    psf = np.zeros(shift + 1)
+    psf[-1] = w1
+    psf[0] = w2
+
+    # normalise
+    # psf = psf / np.sum(psf)
+
+    psf = np.expand_dims(psf, axis=0)
+
+    return psf
+
+def loss_function_two_est(estimate, shifted_img, shift_val, loss_vals, w1_vals, all_losses):
+    """
+    Loss function to optimise the weights of the psf.
+    Just for one w1 and the other is 1 - w1
+    estimate: the estimate of the weight
+    shifted_img: the shifted image
+    shift_val: the shift value
+    """
+    # check num channels of shifted_img
+    w1, w2 = estimate
+    
+    psf_estimate = get_img_psf_2(w1, w2, shift_val)
+    
+    if len(shifted_img.shape) == 3:
+        deconvolved_image = deconvolve_img_colour(shifted_img, psf_estimate)
+    else:
+        deconvolved_image = deconvolve_img(shifted_img, psf_estimate)
+
+    # deconvolved_image = deconvolved_image / np.max(deconvolved_image)
+
+    shift_vals, corr_vals = ac.compute_auto_corr(deconvolved_image, shift_val, shift_est_func=True, normalised=True)
+    
+    valid_index = np.where((np.abs(shift_vals) <= 6) & (shift_vals != 0))[0]
+    valid_index = valid_index.astype(int)
+    # print(valid_index)
+    shift_vals_corrected = []
+    corr_vals_corrected = []
+    
+    for index in valid_index:
+        shift_vals_corrected.append(shift_vals[index])
+        corr_vals_corrected.append(corr_vals[index])
+    
+    reg = minimise_corr_vals(corr_vals_corrected, shift_vals_corrected)
+    # pos_shift_idx = np.where(np.isclose(shift_vals, shift_val))[0].item()
+    # neg_shift_idx = np.where(np.isclose(shift_vals, -shift_val))[0].item()
+    
+    cropped_dec = deconvolved_image[6:-6, 6:-6]
+    convolved = sp.signal.fftconvolve(deconvolved_image, psf_estimate, mode='same')
+    cropped_conv = convolved[6:-6, 6:-6]
+
+    # if (w1 > 0.6 and w2 < 0.4) or (w1 < 0.4 and w2 > 0.6):
+    #     reg += 0.1
+    # else:
+    #     reg += 100
+    loss = ((np.abs(cropped_dec - cropped_conv).sum())) + 0.1*reg
+
+    # loss += np.abs(corr_vals[neg_shift_idx])
+    # loss += np.abs(corr_vals[pos_shift_idx])
+
+    w1_vals.append(estimate)
+    all_losses.append((estimate, loss))
+
+    return loss
+
+def optimise_psf_2(shifted_img, shift_val):
+    """
+    Optimising the w1 value for the PSF
+    shifted_img: the shifted image
+    shift_val: the shift value
+    """
+
+    BOUNDS = (0, 1)
+    loss_vals = []
+    w1_vals = []
+    shift_val = shift_val
+    all_losses = []
+    
+    # result = sp.optimize.differential_evolution(loss_function_two_est, 
+    #                                             bounds=[BOUNDS, BOUNDS], 
+    #                                             args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
+    #                                             disp=True,
+    #                                             tol = 0.00001,
+    #                                             # mutation=(0.9, 1.4),  # Higher mutation factor to explore more aggressively
+    #                                             # recombination=0.4,
+    #                                             polish=False, # use L-BFGS-B to polish the best result
+    #                                             maxiter=75,
+    #                                             popsize = 15,
+    #                                             workers=4)
+    
+    result = sp.optimize.minimize(
+        loss_function_two_est, 
+        x0=[0.5, 0.5],  # Initial guess for w1 w2
+        args=(shifted_img, shift_val, loss_vals, w1_vals, all_losses),
+        method='Powell',
+        bounds=[BOUNDS, BOUNDS],
+        tol=0.001,
+        options={'disp': True}
+    )
+    
+    est = result.x
+    # est_w1 = est[0]
+    # est_w2 = est[1]
+    loss_value = result.fun
+    
+    # est_w1 = clarity_both_imgs(shifted_img, est_w1, shift_val)
+
+    return est, loss_value, all_losses
+     
 
 def deconvolve_img(img, psf, balance = 0, wiener = False, ri_iter = 4):
     """
