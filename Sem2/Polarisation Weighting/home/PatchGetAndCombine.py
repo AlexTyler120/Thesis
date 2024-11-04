@@ -21,7 +21,7 @@ from skimage.filters import rank
 from skimage.restoration import denoise_nl_means, estimate_sigma
 from scipy.stats import zscore
 import pickle
-
+from gt import gt
 def extract_image_patches_no_overlap(image, patch_size):
     """
     Splits an image into patches of the specified size.
@@ -153,6 +153,7 @@ def reconstruct_image_patch_intensity(patches, deconvolved_patches, image_size, 
     
     return reconstructed_image
 
+    
 def extract_image_patches_overlap(image, patch_size):
     """
     Splits an image into overlapping patches of the specified size, with 50% overlap.
@@ -167,9 +168,10 @@ def extract_image_patches_overlap(image, patch_size):
     patches = []
     img_height, img_width = image.shape[:2]
     patch_height, patch_width = patch_size
-    step_y = patch_height // 2
-    step_x = patch_width // 2
-    padding_size = patch_width//2
+    step_y = int(patch_height * 0.45)
+    step_x = int(patch_width * 0.45)
+    # padding_size = patch_width//2
+    padding_size = 6
     # convert bgr to rgb
     # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     # Loop over the image to extract patches with 50% overlap
@@ -178,14 +180,22 @@ def extract_image_patches_overlap(image, patch_size):
             if (y + patch_height <= img_height) and (x + patch_width <= img_width):
                 
                 patch = image[y:y + patch_height, x:x + patch_width]
+                # padded_patch = patch
                 padded_patch = cv2.copyMakeBorder(
                     patch, padding_size, padding_size, padding_size, padding_size, 
                     borderType=cv2.BORDER_REFLECT
                     # borderType=cv2.BORDER_REPLICATE
                     # borderType=cv2.BORDER_CONSTANT
                 )
+                # plt.figure()
+                # plt.subplot(1, 2, 1)
+                # plt.imshow(patch)
+                # plt.title("Original Patch")
+                # plt.subplot(1, 2, 2)
+                # plt.title("Padded Patch")
+                # plt.imshow(padded_patch)
+                # plt.show()
                 patches.append(padded_patch)
-    
     return patches
 def tukey_window(N, alpha=0.5):
     """
@@ -200,7 +210,7 @@ def tukey_window(N, alpha=0.5):
         window[N - n - 1] = window[n]
     
     return window
-
+import numpy.ma as ma
 def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, image_size, patch_size, channel, w12vals):
     """
     Reconstructs the image from overlapping patches by averaging the overlapping areas and blending w1, w2.
@@ -238,15 +248,8 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     weight_map = np.zeros((image_height, image_width), dtype=np.float32)
     std_map = np.zeros((image_height, image_width), dtype=np.float32)
     patch_idx = 0
-    step_y = patch_height // 2  # 50% overlap in vertical direction
-    step_x = patch_width // 2    # 50% overlap in horizontal direction
-
-    def intensity_diff(patch1, patch2):
-        # return np.abs(patch1 - patch2).mean()
-        return np.abs(patch1 - patch2).sum()
-    
-    def w12_diff(w1_current, w2_current, w1_neighbor, w2_neighbor):
-        return np.abs(w1_current - w1_neighbor)
+    step_y = int(patch_height * 0.45)
+    step_x = int(patch_width * 0.45)
     
     num_cols = (image_width - patch_width) // step_x + 1
     num_rows = (image_height - patch_height) // step_y + 1
@@ -263,63 +266,7 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
             cropped_deconvolved_patch = deconvolved_patch[cropp:-cropp, cropp:-cropp] #* hanning_window
             decon_cropped = decon_other[cropp:-cropp, cropp:-cropp]
             
-            
-            
-            # Get the current row and column in terms of patch position
-            row_idx = y // step_y
-            col_idx = x // step_x
-            
-            int_diff = 50 #2
-            w12_diff_ = 0.1
-            test_w1_l = 0
-            test_w2_l = 0
-            test_w1_t = 0
-            test_w2_t = 0
-            # for i in range(1,5):
-            #     # Compare with neighboring patches (left, above) if available
-            #     if col_idx > 0:  # Compare with the left patch based on patch_idx
-            #         left_patch_idx = patch_idx - 1
-            #         left_patch = deconvolved_patches[left_patch_idx]
-            #         left_w1, left_w2 = w12vals[left_patch_idx]
-
-            #         left_intensity_diff = intensity_diff(cropped_deconvolved_patch, left_patch[cropp:-cropp, cropp:-cropp])
-            #         left_w12_diff = w12_diff(w1, w2, left_w1, left_w2)
-
-                    
-
-            #         # If intensity difference is small AND w12 difference is large, adjust to the best choice
-            #         if left_intensity_diff < int_diff and left_w12_diff > w12_diff_:
-            #             # Set w1, w2 to be the same as the left patch
-            #             w1 = w12vals[patch_idx][1]
-            #             w2 = w12vals[patch_idx][0]
-            #             w12vals[patch_idx] = (w1, w2)
-            #             test_w1_l = left_w1
-            #             test_w2_l = left_w2
-
-            #     if row_idx > 0:  # Compare with the patch above based on patch_idx
-            #         top_patch_idx = patch_idx - num_cols
-            #         top_patch = deconvolved_patches[top_patch_idx]
-            #         top_w1, top_w2 = w12vals[top_patch_idx]
-
-            #         top_intensity_diff = intensity_diff(cropped_deconvolved_patch, top_patch[cropp:-cropp, cropp:-cropp])
-            #         top_w12_diff = w12_diff(w1, w2, top_w1, top_w2)
-
-            #         print(f"Top Intensity Diff: {top_intensity_diff}, Top W12 Diff: {top_w12_diff}")
-
-            #         # If intensity difference is small AND w12 difference is large, adjust to the best choice
-            #         if top_intensity_diff < int_diff and top_w12_diff > w12_diff_:
-            #             # Set w1, w2 to be the same as the top patch
-            #             w1 = w12vals[patch_idx][1]
-            #             w2 = w12vals[patch_idx][0]
-            #             w12vals[patch_idx] = (w1, w2)
-            #             test_w1_t = top_w1
-            #             test_w2_t = top_w2
-                    
-            # print(f"Test W1 L: {test_w1_l}, Test W2 L: {test_w2_l}")    
-            # if test_w2_l != 0 and test_w1_l != 0 and test_w2_t != 0 and test_w1_t != 0:
-            #     w1 = (test_w2_l + test_w1_l) / 2
-            #     w2 = (test_w2_l - test_w1_l) / 2
-            #     w12vals[patch_idx] = (w1, w2)
+        
 
             # Blend the deconvolved patch into the reconstructed image
             reconstructed_image[y:y + patch_height, x:x + patch_width] += cropped_deconvolved_patch
@@ -330,10 +277,12 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
             
             I_0_total[y:y + patch_height, x:x + patch_width] += I_0_patch
             I_90_total[y:y + patch_height, x:x + patch_width] += I_90_patch
-
+            # if w1 < w2:
+            #     w1 = -w1
             # Blend the w1 and w2 values
-            w1_map[y:y + patch_height, x:x + patch_width] += w2
-            w2_map[y:y + patch_height, x:x + patch_width] += w1 
+            w1_map[y:y + patch_height, x:x + patch_width] += w1
+            
+            w2_map[y:y + patch_height, x:x + patch_width] += w2 
             
             std_map[y:y + patch_height, x:x + patch_width] += np.std(cropped_deconvolved_patch)
 
@@ -347,15 +296,20 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
             patch_idx += 1
 
     # Normalize the reconstructed image, w1, w2 maps, and intensity maps by the weight map
-    reconstructed_image /= np.maximum(weight_map, 1)  # Prevent division by zero
-    w1_map /= np.maximum(weight_map, 1)
-    w2_map /= np.maximum(weight_map, 1)
-    w_diff_map /= np.maximum(weight_map, 1)
-    I_0_total /= np.maximum(weight_map, 1)
-    I_90_total /= np.maximum(weight_map, 1)
-    std_map /= np.maximum(weight_map, 1)
+    reconstructed_image /= np.maximum(weight_map, 1e-5)  # Prevent division by zero
+    w1_map /= np.maximum(weight_map, 1e-5)
+    w2_map /= np.maximum(weight_map, 1e-5)
+    w_diff_map /= np.maximum(weight_map, 1e-5)
+    I_0_total /= np.maximum(weight_map, 1e-5)
+    I_90_total /= np.maximum(weight_map, 1e-5)
+    std_map /= np.maximum(weight_map, 1e-5)
     
     w_diff_map = w2_map - w1_map
+    # normalse w1_map and w2_map
+    global_min = min(np.min(w1_map), np.min(w2_map))
+    global_max = max(np.max(w1_map), np.max(w2_map))
+    w1_map = (w1_map - global_min) / (global_max - global_min)
+    w2_map = (w2_map - global_min) / (global_max - global_min)
     
     # Calculate the final angle and magnitude maps from the blended w1 and w2 values
     angle_map = np.degrees(np.arctan2(w2_map, w1_map))
@@ -377,8 +331,10 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     w_diff_map = w_diff_map[:patches_col_height, :patches_row_width]
     w1_map = w1_map[:patches_col_height, :patches_row_width]
     w2_map = w2_map[:patches_col_height, :patches_row_width]
-    std_map = std_map[:patches_col_height, :patches_row_width]
     
+    std_map = std_map[:patches_col_height, :patches_row_width]
+    # angle_map = np.clip(angle_map, 0, 55)
+    # angle_map = cv2.normalize(angle_map, None, 0, 90, cv2.NORM_MINMAX)
     # normalise magnitude spectrum
     # magnitude_spectrum = (magnitude_spectrum - np.min(magnitude_spectrum)) / (np.max(magnitude_spectrum) - np.min(magnitude_spectrum))
     # angle_map *= magnitude_spectrum
@@ -387,38 +343,38 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     # angle_map = np.clip(angle_map, 0, 33)
     # angle_map = 33 - angle_map
     # Plot the angle map, magnitude spectrum, and intensity channels
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.imshow(I_0_total, cmap="jet")
-    plt.title("I_0")
-    plt.colorbar()
-    plt.subplot(1, 2, 2)
-    plt.imshow(I_90_total, cmap="jet")
-    plt.title("I_90")
-    plt.colorbar()
-    plt.figure()
-    plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
-    plt.imshow(w1_map, alpha=0.5)
-    plt.title("W1 Map")
-    plt.colorbar()
-    plt.figure()
-    plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
-    plt.imshow(w2_map, alpha=0.5)
-    plt.title("W2 Map")
-    plt.colorbar()
+    # plt.figure()
+    # plt.subplot(1, 2, 1)
+    # plt.imshow(I_0_total, cmap="jet")
+    # plt.title("I_0")
+    # plt.colorbar()
+    # plt.subplot(1, 2, 2)
+    # plt.imshow(I_90_total, cmap="jet")
+    # plt.title("I_90")
+    # plt.colorbar()
+    # plt.figure()
+    # plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
+    # plt.imshow(w1_map, alpha=0.5)
+    # plt.title("W1 Map")
+    # plt.colorbar()
+    # plt.figure()
+    # plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
+    # plt.imshow(w2_map, alpha=0.5)
+    # plt.title("W2 Map")
+    # plt.colorbar()
     plt.figure()
     plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
     plt.imshow(angle_map, cmap='jet', alpha=0.5)#, vmin = 0, vmax = 90)
     plt.title(f"Angle Map channel {channel}")
     plt.colorbar()
     
-    plt.figure()
-    plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
-    guess = angle_map * magnitude_spectrum
-    max_g = np.max(guess)
-    plt.imshow(guess, cmap='jet', alpha=0.5)#, vmin = 0, vmax = 90)
-    plt.title(f"Angle Map channe times l {channel}")
-    plt.colorbar()
+    # plt.figure()
+    # plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
+    # guess = angle_map * magnitude_spectrum
+    # max_g = np.max(guess)
+    # plt.imshow(guess, cmap='jet', alpha=0.5)#, vmin = 0, vmax = 90)
+    # plt.title(f"Angle Map channe times l {channel}")
+    # plt.colorbar()
     
     plt.figure()
     plt.imshow(reconstructed_image, cmap='gray', alpha=0.5)
@@ -430,7 +386,70 @@ def reconstruct_image_patch_intensity_overlap(patches, deconvolved_patches, imag
     plt.imshow(reconstructed_image, cmap='gray')
     plt.title(f"Reconstructed Image channel {channel}")
     
+    # plt.figure()
+    # plt.imshow(std_map, cmap='jet')
+    # plt.title(f"Standard Deviation Map channel {channel}")
+    
+    polar_angles, dolp, ca, cd = gt()
+    
+    ca = ca[:patches_col_height, :patches_row_width]
+    cd = cd[:patches_col_height, :patches_row_width]
+    
+    # Threshold for displaying the angle map
+    threshold = 0.3
+
+    # Create a mask for pixels where dolp >= threshold
+    if channel == 0:
+        dolp_c = dolp['R']
+    elif channel == 1:
+        dolp_c = dolp['G']
+    else:
+        dolp_c = dolp['B']
+    dolp_f = dolp_c[:patches_col_height, :patches_row_width]
+    
+    mask = ma.masked_where(dolp_f < threshold, angle_map)
+
+    # Create a new array to display, which will show the reconstructed image where mask is False
+
+    # Plotting the result
     plt.figure()
-    plt.imshow(std_map, cmap='jet')
-    plt.title(f"Standard Deviation Map channel {channel}")
-    return reconstructed_image, angle_map, magnitude_spectrum
+    plt.imshow(reconstructed_image, cmap='gray')  # Underlay the reconstructed image
+    plt.imshow(mask, cmap='jet')  # Overlay the angle map where dolp >= threshold
+    plt.colorbar(label='Angle Map Intensity')  # Only shows the colorbar for the angle map
+    plt.title(f"Angle Map Masked channel {channel}")
+    plt.figure()
+    if channel == 0:
+        polarb = polar_angles['R']
+    elif channel == 1:
+        polarb = polar_angles['G']
+    else:
+        polarb = polar_angles['B']
+    polarb = polarb[:patches_col_height, :patches_row_width]
+    # mask polar b to wher edolp_f is greater than threshold
+    mask = ma.masked_where(dolp_f < threshold, polarb)
+    display_image = np.where(mask, polarb, reconstructed_image)
+    plt.imshow(mask, cmap='jet')  # Overlay the angle map where dolp >= threshold
+    plt.colorbar(label='Angle Map Intensity')  # Only shows the colorbar for the angle map
+    plt.title(f"Ground Truth AoLP Masked channel {channel}")
+    plt.figure()
+    plt.subplot(1, 2, 1)
+    plt.imshow(dolp_c, cmap='jet')
+    plt.title(f'DoLP channel {channel}')
+    plt.colorbar()
+    plt.subplot(1, 2, 2)
+    plt.imshow(polarb, cmap='jet')
+    plt.title(f'AoLP channel {channel}')
+    plt.colorbar()
+    if channel == 2:
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.imshow(ca, cmap='jet')
+        plt.title(f'Composite AoLP')
+        plt.colorbar()
+        plt.subplot(1, 2, 2)
+        plt.imshow(cd, cmap='jet')
+        plt.title(f'Composite DoLP')
+        plt.colorbar()
+        
+        
+    return reconstructed_image, angle_map, magnitude_spectrum, cd, ca

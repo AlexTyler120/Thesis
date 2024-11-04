@@ -16,6 +16,7 @@ def display_image(img, title, grey=False, showim=False):
     else:
         # bgr to rgb
         # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        # img = cv2.convertScaleAbs(img, alpha=1.2, beta=5)
         plt.imshow(img)
     plt.title(title)
     plt.axis('off')

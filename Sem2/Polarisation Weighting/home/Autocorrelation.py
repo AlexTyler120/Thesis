@@ -99,7 +99,7 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True,
         local_mean = uniform_filter(image, size=patch_size)
         # Local variance (difference from mean squared) for normalization
         local_variance = uniform_filter(image**2, size=patch_size) - local_mean**2
-        return local_mean, np.sqrt(np.maximum(local_variance, 1e-10))  # Variance can't be zero
+        return local_mean, np.sqrt(np.maximum(local_variance, 1e-6))  # Variance can't be zero
 
     # Get the local mean and variance for the original image
     img_mean, img_std = local_mean_variance(img, patch_size)
@@ -134,3 +134,4 @@ def compute_auto_corr(img, est_shift_val, shift_est_func=False, normalised=True,
         corr_values.append(cross_corr)
 
     return shift_values, corr_values
+

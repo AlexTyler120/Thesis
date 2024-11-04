@@ -15,16 +15,18 @@ def main():
     RESIZE_VAR = 1
     GREY = False
     SIMULATED_SHIFT = 5
-    WEIGHTING_SIM = 0.6
+    WEIGHTING_SIM = 0.5
     ANGLE = 0
     PATCH_SIZE = 12
-    item = "fakefruit"
-    prefix = "rect_"
+    item = "caligraphset"
+    prefix = "small_"
+    
     ### Shift estimatrec1es with polarised images ###
     transformed_image = ImageRun.polarised_generation(item, prefix, ANGLE, RESIZE_VAR, GREY, SIMULATED_SHIFT)
+    # transformed_image = ImageRun.simulated_generation("flowerfull.jpg", SIMULATED_SHIFT, RESIZE_VAR, GREY, WEIGHTING_SIM)
     ### ###
-    
-    gt()
+    # ImageRun.run_estimate_w1(transformed_image)
+    # gt()
     rgb, r, g, b, w12 = PatchRun.process_all_chanels(transformed_image, PATCH_SIZE, prefix, item)
     
     plt.figure(figsize=(10, 10))

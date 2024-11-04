@@ -21,7 +21,8 @@ def create_shifted_image_polarised_imgs(img1, img2, shift, show=False):
     # apply a shift to the image 
     img2_shifted[:, shift:] = img2_shifted[:, :-shift]
     # combine images
-    IM_WEIGHT = 0.5
+    # IM_WEIGHT = 0.5
+    IM_WEIGHT = 1
     # img1[:, :, 0] = cv2.equalizeHist(img1[:, :, 0])
     # # channel 1
     # img1[:, :, 1] = cv2.equalizeHist(img1[:, :, 1])
@@ -70,7 +71,7 @@ def create_shifted_simulation(img1, w1, shift):
     # apply a shift to the image 
     img2[:, shift:] = img1[:, :-shift]
     # combine images
-    image_transformed = cv2.addWeighted(img1, w1, img2, 1-w1, 0)
-    Viewer.display_image(image_transformed, "Shifted Image", showim=False)
+    image_transformed = cv2.addWeighted(img1, w1, img2, 1-w1, 1)
+    Viewer.display_image(image_transformed, "Shifted Image", showim=True)
     # image_transformed = img1*w1 + img2*(1-w1)
     return image_transformed / np.max(image_transformed)

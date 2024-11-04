@@ -3,15 +3,17 @@ import matplotlib.pyplot as plt
 import cv2
 
 def calc_stokes(I0, I45, I90, I135):
-    S0 = 0.5*(I0 + I90 + I45 + I135)
+    # S0 = 0.5*(I0 + I90 + I45 + I135)
+    S0 = I0 + I90
     S1 = I0 - I90
     S2 = I45 - I135
     S3 = I135 - I45
     return S0, S1, S2, S3
 
 def calc_dolp(S0, S1, S2):
-    s0_ = np.clip(S0, 1e-6, None)
-    dolp = np.sqrt(S1**2 + S2**2) / s0_
+    # s0_ = np.clip(S0, 1e-6, None)
+    
+    dolp = np.sqrt(S1**2 + S2**2) / S0
     return np.clip(dolp, 0, 1)
 
 def calc_aolp(S0, S1, S2):
@@ -24,6 +26,8 @@ def calc_aolp(S0, S1, S2):
     mask = (phase < 0)
     phase[mask] = phase[mask] + 180*2
     phase /= 2
+    # phase = 0.5 * np.arctan2(S2, S1)
+    # phase = np.degrees(phase)
     return phase
 
 def gt():
@@ -39,8 +43,8 @@ def gt():
     # i90path = 'python/test_im/fakefruit/rect_fakefruit_90.png'
     # i135path = 'python/test_im/fakefruit/rect_fakefruit_135.png'
     # i45path = 'python/test_im/fakefruit/rect_fakefruit_45.png'
-    prefix = "rect_"
-    item = "fakefruit"
+    prefix = "small_"
+    item = "caligraphset"
     i0path = 'python/test_im/'+item+'/'+prefix+item+'_0.png'
     i90path = 'python/test_im/'+item+'/'+prefix+item+'_90.png'
     i135path = 'python/test_im/'+item+'/'+prefix+item+'_135.png'
@@ -65,8 +69,9 @@ def gt():
     dop_partial = {}
     ea_all = {}
     
-    
-
+    S0_total = np.zeros_like(I0[:, :, 0], dtype=np.float32)
+    S1_total = np.zeros_like(I0[:, :, 0], dtype=np.float32)
+    S2_total = np.zeros_like(I0[:, :, 0], dtype=np.float32)
     for i, color in enumerate(channels):
         # Extract each channel
         I0_channel = I0[:, :, i]
@@ -91,14 +96,27 @@ def gt():
         # Store the result in a dictionary
         polarization_angles[color] = theta_deg
         print(color)
-    
-    plt.figure()
-    # plt.subplot(1,2,1)
-    # plt.imshow(np.clip(polarization_angles['R'], -55, 25), cmap='jet')
-    plt.imshow(np.clip(polarization_angles['B'], 0, 90), cmap='jet')
-    plt.title('AoLP')
-    plt.colorbar()
-    plt.axis('off')
+        
+        # Accumulate the Stokes parameters
+        S0_total += S0
+        S1_total += S1
+        S2_total += S2
+
+    # Calculate composite AoLP and DoLP
+    composite_dolp = calc_dolp(S0_total, S1_total, S2_total)
+    composite_aolp = calc_aolp(S0_total, S1_total, S2_total)
+    # plt.figure()
+    # # plt.subplot(1,2,1)
+    # # plt.imshow(np.clip(polarization_angles['R'], -55, 25), cmap='jet')
+    # plt.imshow(np.clip(polarization_angles['B'], 0, 90), cmap='jet')
+    # plt.title('AoLP')
+    # plt.colorbar()
+    # plt.axis('off')
+    # plt.figure()
+    # plt.imshow(np.clip(dop_angles['B'], 0, 1), cmap='jet')
+    # plt.title('DoLP')
+    # plt.colorbar()
+    # plt.axis('off')
     # plt.subplot(1,2,2)
     # plt.imshow(np.clip(dop_angles['B'], 0, 1), cmap='jet')
     # plt.title('DoLP')
@@ -140,18 +158,27 @@ def gt():
     # normalise 0 - 90
     # angle = (angle - np.min(angle)) / (np.max(angle) - np.min(angle))
     mag = np.sqrt(w1_gt**2 + w2_gt**2)
-    
-    plt.figure()
-    plt.subplot(1,2,1)
-    plt.imshow(angle, cmap='jet')
-    plt.title('AoLP GT')
-    plt.axis('off')
-    plt.colorbar()
-    plt.subplot(1,2,2)
-    plt.imshow(mag, cmap='jet')
-    plt.title('DoLP GT')
-    plt.axis('off')
-    plt.colorbar()
+    # plt.figure(figsize=(12, 6))
+    # # plt.subplot(1, 2, 1)
+    # plt.imshow(I0)  # , cmap='jet')
+    # # plt.title('Original Image')
+    # plt.axis('off')
+    # # plt.colorbar()
+    # plt.tight_layout()
+    # plt.figure()
+    # # plt.subplot(1, 2, 2)
+    # im = plt.imshow(composite_dolp, cmap='jet')
+    # # plt.title('DoLP GT')
+    # plt.axis('off')
+    # plt.colorbar(im)
+    # plt.tight_layout()
+    # plt.figure()
+    # # plt.subplot(1, 2, 2)
+    # plt.imshow(composite_aolp, cmap='seismic')
+    # # plt.title('AoLP GT')
+    # plt.axis('off')
+    # plt.colorbar()
+    return polarization_angles, dop_angles, composite_aolp, composite_dolp
     
     
     

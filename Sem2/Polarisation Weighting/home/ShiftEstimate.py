@@ -75,7 +75,14 @@ def compute_pixel_shift(img):
         plt.ylabel("Maximum Correlation Value")
         plt.title("Normalised Cross-Correlation")
         plt.legend(loc='upper left')
-        
+        plt.grid('on')
+        # plt.xlim(-100, 100)  # Clip x-axis to -100 to 100
+        plt.xticks(np.arange(-150, 151, 15))  # Add more ticks on the x-axis
+        plt.tick_params(axis='both', which='major', labelsize=12)  # Increase the size of the axis ticks
+        plt.xlabel("Pixel Shift Values", fontsize=14)  # Increase the size of the x-axis title
+        plt.ylabel("Maximum Correlation Value", fontsize=14)  # Increase the size of the y-axis title
+        plt.yticks(np.arange(-0.2, 1.1, 0.1))  # Add more ticks on the y-axis
+        plt.rcParams.update({'font.size': 18})
         # obtain the peaks of the correlation
         filted_corr_vals = ac.obtain_peak_highlighted_curve(corr_vals)
         peaks, steepness = obtain_correlation_peaks(shift_vals, filted_corr_vals)
@@ -83,7 +90,7 @@ def compute_pixel_shift(img):
         estiamted_shift = sort_peaks(peaks, steepness, shift_vals)
 
         est_shifts.append(estiamted_shift)
-    # plt.show()
+    plt.show()
     estimate_shift = int(np.mean(est_shifts))
 
     return estimate_shift
